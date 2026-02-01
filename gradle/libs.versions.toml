@@ -1,0 +1,30 @@
+[versions]
+agp = "8.3.1"         # 8.2.0 -> 8.3.1로 변경 (안정 버전)
+kotlin = "1.9.23"     # 1.9.0 -> 1.9.23로 변경 (이게 핵심!)
+coreKtx = "1.12.0"    # 최신 버전으로 상향
+junit = "4.13.2"
+junitVersion = "1.1.5"
+espressoCore = "3.5.1"
+appcompat = "1.6.1"
+material = "1.11.0"
+activity = "1.8.2"
+constraintlayout = "2.1.4"
+glide = "4.16.0"
+
+# [libraries]와 [plugins]는 아까 그대로 두셔도 됩니다.
+# 혹시 모르니 아래 [plugins] 부분만 확인해주세요.
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+androidx-activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
+androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
