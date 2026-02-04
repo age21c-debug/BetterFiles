@@ -33,10 +33,10 @@ class FileListActivity : AppCompatActivity() {
     private lateinit var rootPath: String
     private lateinit var rootTitle: String
 
-    // ▼▼▼ 정렬 설정 변수 (SharedPreferences) ▼▼▼
+    // 정렬 설정 변수 (SharedPreferences)
     private lateinit var prefs: SharedPreferences
-    private var currentSortMode = "date" // date, name, size
-    private var isAscending = false      // true: 오름차순, false: 내림차순
+    private var currentSortMode = "name" // 기본값: 이름순
+    private var isAscending = true       // 기본값: 오름차순 (true)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,9 +44,8 @@ class FileListActivity : AppCompatActivity() {
 
         repository = FileRepository(this)
 
-        // 1. 저장된 정렬 설정 불러오기 (앱 재실행 시 유지)
+        // 1. 저장된 정렬 설정 불러오기
         prefs = getSharedPreferences("BetterFilesPrefs", Context.MODE_PRIVATE)
-        // ▼▼▼ [수정] 기본값을 "name"과 "true(오름차순)"으로 변경했습니다 ▼▼▼
         currentSortMode = prefs.getString("sort_mode", "name") ?: "name"
         isAscending = prefs.getBoolean("is_ascending", true)
 
@@ -91,20 +90,17 @@ class FileListActivity : AppCompatActivity() {
     }
 
     // ▼▼▼ 정렬 메뉴 및 저장 로직 ▼▼▼
-    // ▼▼▼ [수정] 현재 상태 체크 표시 기능 추가 ▼▼▼
     private fun showSortMenu(view: View) {
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_sort, popup.menu)
 
-        // 1. 현재 설정값에 따라 체크박스(라디오) 상태 미리 설정하기
-        // (1) 정렬 모드 체크
+        // 1. 현재 설정값에 따라 체크박스 상태 설정
         when (currentSortMode) {
             "name" -> popup.menu.findItem(R.id.sort_name).isChecked = true
             "size" -> popup.menu.findItem(R.id.sort_size).isChecked = true
-            else -> popup.menu.findItem(R.id.sort_date).isChecked = true // 기본: date
+            else -> popup.menu.findItem(R.id.sort_date).isChecked = true
         }
 
-        // (2) 오름차순/내림차순 체크
         if (isAscending) {
             popup.menu.findItem(R.id.order_asc).isChecked = true
         } else {
@@ -114,8 +110,6 @@ class FileListActivity : AppCompatActivity() {
         // 2. 메뉴 클릭 이벤트 처리
         popup.setOnMenuItemClickListener { menuItem ->
             val editor = prefs.edit()
-
-            // 클릭한 항목을 체크 상태로 변경 (시각적 효과)
             menuItem.isChecked = true
 
             when (menuItem.itemId) {
@@ -144,8 +138,8 @@ class FileListActivity : AppCompatActivity() {
                 else -> return@setOnMenuItemClickListener false
             }
 
-            editor.apply() // 저장
-            loadData(currentMode, currentPath) // 화면 갱신
+            editor.apply()
+            loadData(currentMode, currentPath)
             true
         }
         popup.show()
@@ -169,24 +163,23 @@ class FileListActivity : AppCompatActivity() {
                 else -> repository.getFilesByPath(path)
             }
 
-            // ▼▼▼ [핵심] 정렬 로직 (폴더 우선 + 사용자 설정) ▼▼▼
+            // 정렬 로직 (폴더 우선 + 사용자 설정)
             val sortedFiles = rawFiles.sortedWith(Comparator { o1, o2 ->
                 // 1. 폴더 여부 비교 (폴더는 무조건 위로)
                 if (o1.isDirectory != o2.isDirectory) {
                     return@Comparator if (o1.isDirectory) -1 else 1
                 }
 
-                // 2. 정렬 기준(이름/크기/날짜)에 따라 비교값 생성
+                // 2. 정렬 기준 비교
                 val result = when (currentSortMode) {
                     "name" -> o1.name.lowercase().compareTo(o2.name.lowercase())
                     "size" -> o1.size.compareTo(o2.size)
-                    else -> o1.dateModified.compareTo(o2.dateModified) // date
+                    else -> o1.dateModified.compareTo(o2.dateModified)
                 }
 
                 // 3. 오름차순/내림차순 적용
                 if (isAscending) result else -result
             })
-            // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
             val rvFiles = findViewById<RecyclerView>(R.id.rvFiles)
             val layoutEmpty = findViewById<LinearLayout>(R.id.layoutEmpty)
@@ -204,18 +197,95 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // --- (이하 기존 코드 동일) ---
+    // ▼▼▼ 팝업 메뉴 (이름 변경 포함) ▼▼▼
     private fun showFileOptionMenu(view: View, fileItem: FileItem) {
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_file_item, popup.menu)
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
-                R.id.action_share -> { shareFile(fileItem); true }
-                R.id.action_delete -> { showDeleteDialog(fileItem); true }
+                R.id.action_share -> {
+                    shareFile(fileItem)
+                    true
+                }
+                // [추가] 이름 변경
+                R.id.action_rename -> {
+                    showRenameDialog(fileItem)
+                    true
+                }
+                R.id.action_delete -> {
+                    showDeleteDialog(fileItem)
+                    true
+                }
                 else -> false
             }
         }
         popup.show()
+    }
+
+    // ▼▼▼ [추가] 이름 변경 다이얼로그 ▼▼▼
+    private fun showRenameDialog(fileItem: FileItem) {
+        val editText = android.widget.EditText(this)
+        editText.setText(fileItem.name)
+        editText.setSingleLine()
+
+        // 확장자 제외하고 이름만 선택(드래그) 상태로 만들기
+        val dotIndex = fileItem.name.lastIndexOf('.')
+        if (dotIndex > 0) {
+            editText.setSelection(0, dotIndex)
+        } else {
+            editText.selectAll()
+        }
+
+        // 입력창 여백 설정
+        val container = android.widget.FrameLayout(this)
+        val params = android.widget.FrameLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        params.leftMargin = 50 // px
+        params.rightMargin = 50 // px
+        editText.layoutParams = params
+        container.addView(editText)
+
+        AlertDialog.Builder(this)
+            .setTitle("이름 변경")
+            .setView(container)
+            .setPositiveButton("변경") { _, _ ->
+                val newName = editText.text.toString().trim()
+                if (newName.isNotEmpty() && newName != fileItem.name) {
+                    renameFile(fileItem, newName)
+                }
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    // ▼▼▼ [추가] 실제 파일 이름 변경 로직 ▼▼▼
+    private fun renameFile(fileItem: FileItem, newName: String) {
+        val oldFile = File(fileItem.path)
+        val newFile = File(oldFile.parent, newName) // 같은 폴더 내 새 이름
+
+        if (newFile.exists()) {
+            Toast.makeText(this, "이미 같은 이름의 파일이 존재합니다.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (oldFile.renameTo(newFile)) {
+            Toast.makeText(this, "이름이 변경되었습니다.", Toast.LENGTH_SHORT).show()
+
+            // 미디어 스캔 (갤러리 갱신: 옛날 건 지우고, 새 건 등록)
+            MediaScannerConnection.scanFile(
+                this,
+                arrayOf(oldFile.absolutePath, newFile.absolutePath),
+                null,
+                null
+            )
+
+            // 목록 새로고침
+            loadData(currentMode, currentPath)
+        } else {
+            Toast.makeText(this, "이름 변경 실패. 권한을 확인하세요.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun shareFile(fileItem: FileItem) {

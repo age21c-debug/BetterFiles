@@ -4,6 +4,11 @@
         android:id="@+id/action_share"
         android:title="공유"
         android:icon="@android:drawable/ic_menu_share"/>
+
+    <item
+        android:id="@+id/action_rename"
+        android:title="이름 변경"
+        android:icon="@android:drawable/ic_menu_edit" />
     <item
         android:id="@+id/action_delete"
         android:title="삭제"
