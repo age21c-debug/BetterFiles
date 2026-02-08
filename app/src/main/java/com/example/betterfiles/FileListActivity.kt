@@ -36,7 +36,7 @@ class FileListActivity : AppCompatActivity() {
     private var searchJob: Job? = null
     // 검색 모드 상태 확인 변수
     private var isSearchMode: Boolean = false
-    private var currentSearchQuery: String = "" // 현재 검색어 저장용
+    private var currentSearchQuery: String = ""
 
     // 네비게이션 변수
     private var currentPath: String = ""
@@ -54,12 +54,9 @@ class FileListActivity : AppCompatActivity() {
         setContentView(R.layout.activity_file_list)
 
         repository = FileRepository(this)
-
-        // 1. 초기 설정 불러오기
         prefs = getSharedPreferences("BetterFilesPrefs", Context.MODE_PRIVATE)
-        loadSavedSortSettings()
 
-        // Intent 데이터 수신
+        // 1. Intent 데이터 수신
         val intentTitle = intent.getStringExtra("title") ?: "파일"
         currentMode = intent.getStringExtra("mode") ?: "folder"
         val intentPath = intent.getStringExtra("path") ?: Environment.getExternalStorageDirectory().absolutePath
@@ -67,6 +64,9 @@ class FileListActivity : AppCompatActivity() {
         rootTitle = intentTitle
         rootPath = intentPath
         currentPath = intentPath
+
+        // 2. 현재 모드에 맞는 정렬 설정 불러오기
+        loadSavedSortSettings()
 
         val rvFiles: RecyclerView = findViewById(R.id.rvFiles)
         val btnBack: ImageView = findViewById(R.id.btnBack)
@@ -104,9 +104,38 @@ class FileListActivity : AppCompatActivity() {
         loadData(currentMode, rootPath)
     }
 
+    // ▼▼▼ [핵심 수정] 모드별 디폴트 값 차등 적용 ▼▼▼
     private fun loadSavedSortSettings() {
-        currentSortMode = prefs.getString("sort_mode", "name") ?: "name"
-        isAscending = prefs.getBoolean("is_ascending", true)
+        val sortKey = "sort_mode_$currentMode"
+        val ascKey = "is_ascending_$currentMode"
+
+        // 디폴트 값 결정 로직
+        val defaultSortMode: String
+        val defaultIsAscending: Boolean
+
+        if (currentMode == "folder") {
+            // 폴더 모드(내장 메모리): 기본값 '이름 오름차순' (가나다순)
+            defaultSortMode = "name"
+            defaultIsAscending = true
+        } else {
+            // 카테고리 모드(이미지, 비디오, 다운로드 등): 기본값 '날짜 내림차순' (최신순)
+            defaultSortMode = "date"
+            defaultIsAscending = false
+        }
+
+        // 저장된 값이 없으면 위의 디폴트 값을 사용
+        currentSortMode = prefs.getString(sortKey, defaultSortMode) ?: defaultSortMode
+        isAscending = prefs.getBoolean(ascKey, defaultIsAscending)
+    }
+
+    private fun saveSortSettings() {
+        val editor = prefs.edit()
+        val sortKey = "sort_mode_$currentMode"
+        val ascKey = "is_ascending_$currentMode"
+
+        editor.putString(sortKey, currentSortMode)
+        editor.putBoolean(ascKey, isAscending)
+        editor.apply()
     }
 
     private fun setupHeaderEvents() {
@@ -156,13 +185,11 @@ class FileListActivity : AppCompatActivity() {
         })
     }
 
-    // ▼▼▼ [수정] 모드별 검색 로직 분기 처리 ▼▼▼
     private fun performSearch(query: String) {
         searchJob?.cancel()
 
         if (query.isEmpty()) {
             lifecycleScope.launch {
-                // 검색어 없을 때: 모드에 맞는 전체 목록 로드
                 val rawFiles = when (currentMode) {
                     "image" -> repository.getAllImages()
                     "video" -> repository.getAllVideos()
@@ -176,27 +203,25 @@ class FileListActivity : AppCompatActivity() {
         }
 
         searchJob = lifecycleScope.launch {
-            // ▼ 모드에 따라 검색 방식 결정
             val results = when (currentMode) {
-                "image" -> repository.getAllImages(query) // DB 검색
-                "video" -> repository.getAllVideos(query) // DB 검색
-                "audio" -> repository.getAllAudio(query) // DB 검색
+                "image" -> repository.getAllImages(query)
+                "video" -> repository.getAllVideos(query)
+                "audio" -> repository.getAllAudio(query)
                 "download" -> {
-                    // 다운로드 폴더는 '재귀 검색'으로 처리 (전략대로)
                     val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
                     repository.searchRecursive(downloadPath, query)
                 }
-                "folder" -> repository.searchRecursive(currentPath, query) // 기존 재귀 검색
+                "folder" -> repository.searchRecursive(currentPath, query)
                 else -> repository.searchRecursive(currentPath, query)
             }
-
             applySortAndSubmit(results, isSearchResult = true)
         }
     }
 
     private fun closeSearchMode() {
         isSearchMode = false
-        loadSavedSortSettings() // 설정 복구
+        // 검색 종료 시: 해당 모드의 원래 설정값 복구
+        loadSavedSortSettings()
 
         val headerNormal: LinearLayout = findViewById(R.id.headerNormal)
         val headerSearch: LinearLayout = findViewById(R.id.headerSearch)
@@ -236,10 +261,7 @@ class FileListActivity : AppCompatActivity() {
             }
 
             if (!isSearchMode) {
-                val editor = prefs.edit()
-                editor.putString("sort_mode", currentSortMode)
-                editor.putBoolean("is_ascending", isAscending)
-                editor.apply()
+                saveSortSettings()
                 loadData(currentMode, currentPath)
             } else {
                 performSearch(currentSearchQuery)
@@ -322,7 +344,6 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // --- (이하 나머지 팝업 메뉴, 파일 조작 함수들은 기존과 동일) ---
     private fun showFileOptionMenu(view: View, fileItem: FileItem) {
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_file_item, popup.menu)
