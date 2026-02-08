@@ -12,6 +12,7 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import android.widget.Button
 import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
@@ -21,18 +22,24 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.cardview.widget.CardView
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class FileListActivity : AppCompatActivity() {
 
     private lateinit var adapter: FileAdapter
     private lateinit var repository: FileRepository
+
+    // [수정됨] 데이터 로딩 작업 관리 (중복 로딩 방지)
+    private var loadJob: Job? = null
 
     // 검색 작업 관리
     private var searchJob: Job? = null
@@ -79,7 +86,10 @@ class FileListActivity : AppCompatActivity() {
         adapter = FileAdapter(
             onClick = { fileItem ->
                 if (fileItem.isDirectory) {
-                    closeSearchMode()
+                    // [수정됨] 검색 모드일 때만 검색 종료 로직 실행 (불필요한 리로드 방지)
+                    if (isSearchMode) {
+                        closeSearchMode()
+                    }
                     loadData("folder", fileItem.path)
                 } else {
                     openFile(fileItem)
@@ -89,11 +99,12 @@ class FileListActivity : AppCompatActivity() {
                 showFileOptionMenu(view, fileItem)
             },
             onLongClick = { fileItem ->
-                // 롱클릭 시 선택 모드 시작
-                startSelectionMode(fileItem)
+                // 복사/이동 중이 아닐 때만 선택 모드 진입
+                if (!FileClipboard.hasClip()) {
+                    startSelectionMode(fileItem)
+                }
             },
             onSelectionChanged = {
-                // 선택 개수 변경 시 UI 업데이트
                 updateSelectionUI()
             }
         )
@@ -103,9 +114,10 @@ class FileListActivity : AppCompatActivity() {
         btnBack.setOnClickListener { handleBackAction() }
 
         setupHeaderEvents()
-
-        // 선택 모드 헤더 버튼들 이벤트 연결
         setupSelectionEvents()
+
+        // 붙여넣기 바 이벤트 설정
+        setupPasteEvents()
 
         // 뒤로가기 버튼 처리 (우선순위: 선택모드 > 검색모드 > 일반)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -123,35 +135,199 @@ class FileListActivity : AppCompatActivity() {
         loadData(currentMode, rootPath)
     }
 
-    // ▼▼▼ 선택 모드 관련 로직 (전체 선택 포함) ▼▼▼
+    // ▼▼▼ 복사/이동/붙여넣기 관련 로직 ▼▼▼
+
+    private fun setupPasteEvents() {
+        val btnCancelPaste: Button = findViewById(R.id.btnCancelPaste)
+        val btnPaste: Button = findViewById(R.id.btnPaste)
+
+        btnCancelPaste.setOnClickListener {
+            FileClipboard.clear()
+            updatePasteBarUI()
+        }
+
+        btnPaste.setOnClickListener {
+            performPaste()
+        }
+    }
+
+    private fun updatePasteBarUI() {
+        val layoutPasteBar: CardView = findViewById(R.id.layoutPasteBar)
+        val btnPaste: Button = findViewById(R.id.btnPaste)
+        val tvPasteInfo: TextView = findViewById(R.id.tvPasteInfo)
+
+        val hasClip = FileClipboard.hasClip()
+
+        adapter.isPasteMode = hasClip
+        adapter.notifyDataSetChanged()
+
+        if (hasClip) {
+            layoutPasteBar.visibility = View.VISIBLE
+            val count = FileClipboard.files.size
+            val isMove = FileClipboard.isMove
+
+            // 1. 텍스트 설정
+            if (isMove) {
+                tvPasteInfo.text = "$count 개 항목 이동 대기 중..."
+                btnPaste.text = "여기로 이동"
+            } else {
+                tvPasteInfo.text = "$count 개 항목 복사 대기 중..."
+                btnPaste.text = "여기에 복사"
+            }
+
+            // 2. 같은 폴더 이동 방지 로직
+            val sourceParentPath = FileClipboard.files.firstOrNull()?.parent
+
+            if (isMove && sourceParentPath == currentPath) {
+                btnPaste.isEnabled = false
+                btnPaste.alpha = 0.5f
+            } else {
+                btnPaste.isEnabled = true
+                btnPaste.alpha = 1.0f
+            }
+
+        } else {
+            layoutPasteBar.visibility = View.GONE
+        }
+    }
+
+    private fun performPaste() {
+        val targetDir = File(currentPath)
+        if (!targetDir.canWrite()) {
+            Toast.makeText(this, "이 폴더에는 쓸 수 없습니다.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            var successCount = 0
+            val pathsToScan = mutableListOf<String>()
+
+            FileClipboard.files.forEach { sourceFile ->
+                if (!sourceFile.exists()) return@forEach
+
+                // 이름 중복 처리
+                val destFile = getUniqueFile(targetDir, sourceFile.name)
+
+                try {
+                    if (sourceFile.isDirectory) {
+                        sourceFile.copyRecursively(destFile, overwrite = true)
+                    } else {
+                        sourceFile.copyTo(destFile, overwrite = true)
+                    }
+
+                    if (FileClipboard.isMove) {
+                        if (sourceFile.isDirectory) sourceFile.deleteRecursively() else sourceFile.delete()
+                        pathsToScan.add(sourceFile.absolutePath)
+                    }
+
+                    successCount++
+                    pathsToScan.add(destFile.absolutePath)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                if (successCount > 0) {
+                    val msg = if (FileClipboard.isMove) "이동 완료" else "복사 완료"
+                    Toast.makeText(this@FileListActivity, "$successCount 개 $msg", Toast.LENGTH_SHORT).show()
+
+                    MediaScannerConnection.scanFile(this@FileListActivity, pathsToScan.toTypedArray(), null, null)
+
+                    FileClipboard.clear()
+
+                    updatePasteBarUI()
+                    loadData(currentMode, currentPath)
+                } else {
+                    Toast.makeText(this@FileListActivity, "작업에 실패했습니다.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun getUniqueFile(dir: File, name: String): File {
+        var file = File(dir, name)
+        if (!file.exists()) return file
+
+        val nameWithoutExtension = file.nameWithoutExtension
+        val extension = file.extension
+        var count = 1
+
+        while (file.exists()) {
+            val newName = if (extension.isNotEmpty()) {
+                "$nameWithoutExtension ($count).$extension"
+            } else {
+                "$nameWithoutExtension ($count)"
+            }
+            file = File(dir, newName)
+            count++
+        }
+        return file
+    }
+
+    private fun copyOrMoveSelected(isMove: Boolean) {
+        val selectedItems = adapter.currentList.filter { it.isSelected }
+        if (selectedItems.isEmpty()) return
+
+        val files = selectedItems.map { File(it.path) }
+        FileClipboard.files = files
+        FileClipboard.isMove = isMove
+
+        closeSelectionMode()
+        updatePasteBarUI()
+
+        val action = if (isMove) "이동" else "복사"
+        Toast.makeText(this, "$action 할 위치로 가서 '$action' 버튼을 누르세요.", Toast.LENGTH_SHORT).show()
+    }
+
+    // ▲▲▲ 복사/이동/붙여넣기 로직 끝 ▲▲▲
+
+    // ▼▼▼ 선택 모드 관련 로직 ▼▼▼
 
     private fun setupSelectionEvents() {
         val btnCloseSelection: ImageView = findViewById(R.id.btnCloseSelection)
-        val btnSelectAll: ImageView = findViewById(R.id.btnSelectAll) // 전체선택 버튼
+        val btnSelectAll: ImageView = findViewById(R.id.btnSelectAll)
         val btnShareSelection: ImageView = findViewById(R.id.btnShareSelection)
         val btnDeleteSelection: ImageView = findViewById(R.id.btnDeleteSelection)
 
+        val btnSelectionMore: ImageView = findViewById(R.id.btnSelectionMore)
+
         btnCloseSelection.setOnClickListener { closeSelectionMode() }
-        btnSelectAll.setOnClickListener { toggleSelectAll() } // 리스너 연결
+        btnSelectAll.setOnClickListener { toggleSelectAll() }
+
+        btnSelectionMore.setOnClickListener { view ->
+            showSelectionMoreMenu(view)
+        }
+
         btnShareSelection.setOnClickListener { shareSelectedFiles() }
         btnDeleteSelection.setOnClickListener { showDeleteSelectionDialog() }
     }
 
-    // 전체 선택 / 해제 토글 로직
+    private fun showSelectionMoreMenu(view: View) {
+        val popup = PopupMenu(this, view)
+        popup.menuInflater.inflate(R.menu.menu_selection_more, popup.menu)
+        popup.setOnMenuItemClickListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.action_copy -> {
+                    copyOrMoveSelected(isMove = false)
+                    true
+                }
+                R.id.action_move -> {
+                    copyOrMoveSelected(isMove = true)
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
+    }
+
     private fun toggleSelectAll() {
         val currentList = adapter.currentList
         if (currentList.isEmpty()) return
-
-        // 1. 현재 모든 항목이 선택되어 있는지 확인
         val isAllSelected = currentList.all { it.isSelected }
-
-        // 2. 상태 반전 (모두 선택됨 -> 모두 해제 / 아니면 -> 모두 선택)
         val newState = !isAllSelected
-
-        // 3. 리스트의 모든 항목 상태 변경
         currentList.forEach { it.isSelected = newState }
-
-        // 4. 화면 갱신
         adapter.notifyDataSetChanged()
         updateSelectionUI()
     }
@@ -159,15 +335,10 @@ class FileListActivity : AppCompatActivity() {
     private fun startSelectionMode(initialItem: FileItem) {
         if (isSelectionMode) return
         isSelectionMode = true
-
-        // 롱클릭한 아이템을 먼저 선택 상태로 만듦
         initialItem.isSelected = true
-
-        // 어댑터 모드 변경 및 갱신 (체크박스 보이기)
         adapter.isSelectionMode = true
         adapter.notifyDataSetChanged()
 
-        // 헤더 교체 (일반/검색 -> 선택 헤더)
         findViewById<LinearLayout>(R.id.headerNormal).visibility = View.GONE
         findViewById<LinearLayout>(R.id.headerSearch).visibility = View.GONE
         findViewById<LinearLayout>(R.id.headerSelection).visibility = View.VISIBLE
@@ -177,13 +348,10 @@ class FileListActivity : AppCompatActivity() {
 
     private fun closeSelectionMode() {
         isSelectionMode = false
-
-        // 모든 항목 선택 해제
         adapter.currentList.forEach { it.isSelected = false }
         adapter.isSelectionMode = false
         adapter.notifyDataSetChanged()
 
-        // 헤더 복구
         findViewById<LinearLayout>(R.id.headerSelection).visibility = View.GONE
         if (isSearchMode) {
             findViewById<LinearLayout>(R.id.headerSearch).visibility = View.VISIBLE
@@ -445,31 +613,30 @@ class FileListActivity : AppCompatActivity() {
             adapter.submitList(sortedFiles)
         }
 
-        // ▼▼▼ [수정됨] 모드에 따라 텍스트 표시 분기 ▼▼▼
         if (isSearchResult) {
             tvFileCount.text = "${sortedFiles.size}개 검색됨"
         } else {
             if (currentMode == "folder") {
-                // 내장 메모리(폴더) 모드일 때만 폴더/파일 개수 구분
                 val folderCount = sortedFiles.count { it.isDirectory }
                 val fileCount = sortedFiles.count { !it.isDirectory }
                 tvFileCount.text = "${folderCount}개 폴더 • ${fileCount}개 파일"
             } else {
-                // 카테고리 모드(이미지 등)는 폴더 없이 파일만 있으므로 전체 개수만 표시
                 tvFileCount.text = "${sortedFiles.size}개 파일"
             }
         }
     }
 
-    // loadData: 경로 표시 로직 포함
+    // loadData: 경로 표시 및 붙여넣기 바 UI 갱신 호출
     private fun loadData(mode: String, path: String) {
+        // [수정됨] 이전 로딩 작업 취소 (화면 깜빡임 및 데이터 덮어쓰기 방지)
+        loadJob?.cancel()
+
         currentMode = mode
         currentPath = path
 
         val tvTitle = findViewById<TextView>(R.id.tvPageTitle)
         val btnNewFolder = findViewById<ImageView>(R.id.btnNewFolder)
 
-        // 경로 표시 뷰 바인딩
         val scrollViewPath = findViewById<HorizontalScrollView>(R.id.scrollViewPath)
         val tvPathIndicator = findViewById<TextView>(R.id.tvPathIndicator)
 
@@ -500,7 +667,10 @@ class FileListActivity : AppCompatActivity() {
             if (scrollViewPath != null) scrollViewPath.visibility = View.GONE
         }
 
-        lifecycleScope.launch {
+        updatePasteBarUI()
+
+        // [수정됨] 새로운 로딩 작업 시작
+        loadJob = lifecycleScope.launch {
             val rawFiles = when (mode) {
                 "image" -> repository.getAllImages()
                 "video" -> repository.getAllVideos()
@@ -527,7 +697,7 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun showRenameDialog(fileItem: FileItem) {
-        val editText = android.widget.EditText(this)
+        val editText = EditText(this)
         editText.setText(fileItem.name)
         editText.setSingleLine()
         val dotIndex = fileItem.name.lastIndexOf('.')
@@ -628,7 +798,7 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun showCreateFolderDialog() {
-        val editText = android.widget.EditText(this)
+        val editText = EditText(this)
         editText.hint = "새 폴더 이름"
         editText.setSingleLine()
 

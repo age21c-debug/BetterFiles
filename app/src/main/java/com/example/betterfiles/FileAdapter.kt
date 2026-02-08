@@ -1,6 +1,5 @@
 package com.example.betterfiles
 
-import android.content.pm.PackageManager
 import android.graphics.Color
 import android.text.format.Formatter
 import android.util.TypedValue
@@ -29,6 +28,9 @@ class FileAdapter(
     // 선택 모드 상태 변수
     var isSelectionMode = false
 
+    // [추가] 복사/이동(붙여넣기 대기) 모드 상태 변수
+    var isPasteMode = false
+
     // 외부에서 현재 리스트에 접근할 수 있도록 프로퍼티 추가
     val currentList: List<FileItem>
         get() = files
@@ -56,7 +58,7 @@ class FileAdapter(
         private val btnMore: ImageView = itemView.findViewById(R.id.btnMore)
         private val cbSelect: CheckBox = itemView.findViewById(R.id.cbSelect)
 
-        // ▼▼▼ [수정] 배경 리소스 ID를 안전하게 미리 가져옴 (Crash 해결 핵심) ▼▼▼
+        // 배경 리소스 ID를 안전하게 미리 가져옴 (물결 효과)
         private val rippleResId: Int = with(TypedValue()) {
             itemView.context.theme.resolveAttribute(android.R.attr.selectableItemBackground, this, true)
             resourceId
@@ -107,6 +109,7 @@ class FileAdapter(
 
                 } else if (isPdfFile(item.name)) {
                     ivIcon.setImageResource(R.drawable.ic_pdf)
+                    // 리소스 없을 경우 대비
                     if (itemView.resources.getIdentifier("ic_pdf", "drawable", itemView.context.packageName) == 0) {
                         ivIcon.setImageResource(R.drawable.ic_file)
                     }
@@ -144,9 +147,10 @@ class FileAdapter(
             }
 
             // ------------------------------------------------------------
-            // ▼▼▼ [수정] 선택 모드 UI 로직 (배경 설정 안전하게 변경) ▼▼▼
+            // UI 상태 제어 (선택 모드 & 붙여넣기 모드)
             // ------------------------------------------------------------
             if (isSelectionMode) {
+                // 선택 모드: 더보기 숨김, 체크박스 표시
                 btnMore.visibility = View.GONE
                 cbSelect.visibility = View.VISIBLE
                 cbSelect.isChecked = item.isSelected
@@ -154,13 +158,20 @@ class FileAdapter(
                 if (item.isSelected) {
                     itemView.setBackgroundColor(Color.parseColor("#E3F2FD")) // 선택됨: 파란색
                 } else {
-                    itemView.setBackgroundResource(rippleResId) // 선택안됨: 기본 물결 (에러 수정됨)
+                    itemView.setBackgroundResource(rippleResId) // 선택안됨: 기본
                 }
             } else {
-                btnMore.visibility = View.VISIBLE
+                // 일반 모드
                 cbSelect.visibility = View.GONE
                 cbSelect.isChecked = false
-                itemView.setBackgroundResource(rippleResId) // 일반 모드: 기본 물결 (에러 수정됨)
+                itemView.setBackgroundResource(rippleResId)
+
+                // [수정됨] 붙여넣기 모드(isPasteMode)일 때는 더보기 버튼 숨김
+                if (isPasteMode) {
+                    btnMore.visibility = View.GONE
+                } else {
+                    btnMore.visibility = View.VISIBLE
+                }
             }
 
             // ------------------------------------------------------------
@@ -177,6 +188,7 @@ class FileAdapter(
             }
 
             itemView.setOnLongClickListener {
+                // 선택 모드가 아닐 때만 롱클릭 허용 (Activity에서 추가 제어하지만 여기서도 체크)
                 if (!isSelectionMode) {
                     onLongClick(item)
                     return@setOnLongClickListener true

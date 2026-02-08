@@ -1,276 +1,344 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="#FFFFFF"
     tools:context=".FileListActivity">
 
-    <FrameLayout
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="#FFFFFF"
-        android:elevation="4dp">
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:layout_above="@id/layoutPasteBar">
 
-        <LinearLayout
-            android:id="@+id/headerNormal"
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp"
-            android:visibility="visible">
+            android:background="#FFFFFF"
+            android:elevation="4dp">
 
             <LinearLayout
+                android:id="@+id/headerNormal"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <ImageView
-                    android:id="@+id/btnBack"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_arrow_back"
-                    app:tint="#111111"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
-                    android:focusable="true"/>
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:gravity="center_vertical"
+                android:visibility="visible">
 
                 <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <ImageView
+                        android:id="@+id/btnBack"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_arrow_back"
+                        app:tint="#111111"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:clickable="true"
+                        android:focusable="true"/>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginStart="16dp">
+
+                        <TextView
+                            android:id="@+id/tvPageTitle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="내장 메모리"
+                            android:textSize="18sp"
+                            android:textStyle="bold"
+                            android:textColor="#111111"/>
+
+                        <TextView
+                            android:id="@+id/tvFileCount"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0개 파일"
+                            android:textSize="12sp"
+                            android:textColor="#888888"
+                            android:layout_marginTop="2dp"/>
+                    </LinearLayout>
+
+                    <ImageView
+                        android:id="@+id/btnSearch"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_search"
+                        app:tint="#111111"
+                        android:layout_marginEnd="16dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:clickable="true"
+                        android:focusable="true"/>
+
+                    <ImageView
+                        android:id="@+id/btnNewFolder"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_add_folder"
+                        app:tint="#111111"
+                        android:layout_marginEnd="16dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:clickable="true"
+                        android:focusable="true"/>
+
+                    <ImageView
+                        android:id="@+id/btnSort"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@android:drawable/ic_menu_sort_by_size"
+                        app:tint="#111111"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:clickable="true"
+                        android:focusable="true"/>
+                </LinearLayout>
+
+                <HorizontalScrollView
+                    android:id="@+id/scrollViewPath"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none"
+                    android:layout_marginTop="12dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/tvPathIndicator"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="내장 메모리 > 상위폴더"
+                        android:textSize="14sp"
+                        android:textColor="#1E88E5"
+                        android:singleLine="true"/>
+                </HorizontalScrollView>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/headerSearch"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:padding="16dp"
+                android:gravity="center_vertical"
+                android:background="#FFFFFF"
+                android:visibility="gone">
+
+                <EditText
+                    android:id="@+id/etSearch"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:layout_marginStart="16dp">
-
-                    <TextView
-                        android:id="@+id/tvPageTitle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="내장 메모리"
-                        android:textSize="18sp"
-                        android:textStyle="bold"
-                        android:textColor="#111111"/>
-
-                    <TextView
-                        android:id="@+id/tvFileCount"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="0개 파일"
-                        android:textSize="12sp"
-                        android:textColor="#888888"
-                        android:layout_marginTop="2dp"/>
-                </LinearLayout>
+                    android:hint="하위 폴더 포함 검색..."
+                    android:background="@null"
+                    android:textSize="16sp"
+                    android:textColor="#111111"
+                    android:paddingVertical="8dp"
+                    android:inputType="text"/>
 
                 <ImageView
-                    android:id="@+id/btnSearch"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_search"
-                    app:tint="#111111"
-                    android:layout_marginEnd="16dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
-                    android:focusable="true"/>
-
-                <ImageView
-                    android:id="@+id/btnNewFolder"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_add_folder"
-                    app:tint="#111111"
-                    android:layout_marginEnd="16dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
-                    android:focusable="true"/>
-
-                <ImageView
-                    android:id="@+id/btnSort"
+                    android:id="@+id/btnSearchSort"
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:src="@android:drawable/ic_menu_sort_by_size"
-                    app:tint="#111111"
+                    app:tint="#757575"
+                    android:layout_marginStart="8dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"/>
+
+                <ImageView
+                    android:id="@+id/btnCloseSearch"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_close"
+                    app:tint="#757575"
+                    android:layout_marginStart="16dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:focusable="true"/>
             </LinearLayout>
 
-            <HorizontalScrollView
-                android:id="@+id/scrollViewPath"
+            <LinearLayout
+                android:id="@+id/headerSelection"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:scrollbars="none"
-                android:layout_marginTop="12dp"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:padding="16dp"
+                android:gravity="center_vertical"
+                android:background="#E3F2FD"
                 android:visibility="gone">
 
+                <ImageView
+                    android:id="@+id/btnCloseSelection"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_close"
+                    app:tint="#1E88E5"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"/>
+
                 <TextView
-                    android:id="@+id/tvPathIndicator"
-                    android:layout_width="wrap_content"
+                    android:id="@+id/tvSelectionCount"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="내장 메모리 > 상위폴더"
-                    android:textSize="14sp"
+                    android:layout_weight="1"
+                    android:text="0개"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
                     android:textColor="#1E88E5"
-                    android:singleLine="true"/>
-            </HorizontalScrollView>
+                    android:layout_marginStart="16dp"/>
 
-        </LinearLayout>
+                <ImageView
+                    android:id="@+id/btnSelectAll"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_select_all"
+                    app:tint="#673AB7"
+                    android:layout_marginEnd="20dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:contentDescription="전체 선택"/>
 
-        <LinearLayout
-            android:id="@+id/headerSearch"
+                <ImageView
+                    android:id="@+id/btnShareSelection"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@android:drawable/ic_menu_share"
+                    app:tint="#1E88E5"
+                    android:layout_marginEnd="20dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"/>
+
+                <ImageView
+                    android:id="@+id/btnDeleteSelection"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@android:drawable/ic_menu_delete"
+                    app:tint="#E53935"
+                    android:layout_marginEnd="10dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"/>
+
+                <ImageView
+                    android:id="@+id/btnSelectionMore"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_more_vert"
+                    app:tint="#1E88E5"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:tooltipText="더보기"/>
+            </LinearLayout>
+
+        </FrameLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvFiles"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="horizontal"
-            android:padding="16dp"
-            android:gravity="center_vertical"
-            android:background="#FFFFFF"
-            android:visibility="gone">
-
-            <EditText
-                android:id="@+id/etSearch"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="하위 폴더 포함 검색..."
-                android:background="@null"
-                android:textSize="16sp"
-                android:textColor="#111111"
-                android:paddingVertical="8dp"
-                android:inputType="text"/>
-
-            <ImageView
-                android:id="@+id/btnSearchSort"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@android:drawable/ic_menu_sort_by_size"
-                app:tint="#757575"
-                android:layout_marginStart="8dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"/>
-
-            <ImageView
-                android:id="@+id/btnCloseSearch"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_close"
-                app:tint="#757575"
-                android:layout_marginStart="16dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"/>
-        </LinearLayout>
+            android:clipToPadding="false"
+            android:paddingBottom="80dp"
+            android:visibility="visible"/>
 
         <LinearLayout
-            android:id="@+id/headerSelection"
+            android:id="@+id/layoutEmpty"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:orientation="horizontal"
-            android:padding="16dp"
-            android:gravity="center_vertical"
-            android:background="#E3F2FD"
-            android:visibility="gone">
+            android:orientation="vertical"
+            android:gravity="center"
+            android:visibility="gone"
+            android:background="#F8F9FA">
 
             <ImageView
-                android:id="@+id/btnCloseSelection"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_close"
-                app:tint="#1E88E5"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"/>
+                android:id="@+id/ivEmptyIcon"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:src="@drawable/ic_folder_solid"
+                app:tint="#DDDDDD"
+                android:layout_marginBottom="16dp"/>
 
             <TextView
-                android:id="@+id/tvSelectionCount"
+                android:id="@+id/tvEmptyTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="폴더가 비어있어요"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#999999"/>
+
+            <TextView
+                android:id="@+id/tvEmptyMessage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="파일이 없습니다."
+                android:textSize="14sp"
+                android:textColor="#BBBBBB"
+                android:layout_marginTop="8dp"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/layoutPasteBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_margin="16dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="16dp"
+            android:gravity="center_vertical"
+            android:background="#323232">
+
+            <TextView
+                android:id="@+id/tvPasteInfo"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="0개 선택됨"
-                android:textSize="18sp"
+                android:text="1개 항목 복사 중..."
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
                 android:textStyle="bold"
-                android:textColor="#1E88E5"
-                android:layout_marginStart="16dp"/>
+                android:layout_marginStart="8dp"/>
 
-            <ImageView
-                android:id="@+id/btnSelectAll"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_select_all"
-                app:tint="#673AB7"
-                android:layout_marginEnd="20dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"
-                android:contentDescription="전체 선택"/>
+            <Button
+                android:id="@+id/btnCancelPaste"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="취소"
+                android:textColor="#FFFFFF"
+                android:background="?attr/selectableItemBackground"
+                style="?attr/borderlessButtonStyle"/>
 
-            <ImageView
-                android:id="@+id/btnShareSelection"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@android:drawable/ic_menu_share"
-                app:tint="#1E88E5"
-                android:layout_marginEnd="20dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"/>
-
-            <ImageView
-                android:id="@+id/btnDeleteSelection"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@android:drawable/ic_menu_delete"
-                app:tint="#E53935"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:clickable="true"
-                android:focusable="true"/>
+            <Button
+                android:id="@+id/btnPaste"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="붙여넣기"
+                android:textColor="#4FC3F7"
+                android:textStyle="bold"
+                android:background="?attr/selectableItemBackground"
+                style="?attr/borderlessButtonStyle"/>
         </LinearLayout>
+    </androidx.cardview.widget.CardView>
 
-    </FrameLayout>
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvFiles"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:paddingBottom="20dp"
-        android:visibility="visible"/>
-
-    <LinearLayout
-        android:id="@+id/layoutEmpty"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:visibility="gone"
-        android:background="#F8F9FA">
-
-        <ImageView
-            android:id="@+id/ivEmptyIcon"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:src="@drawable/ic_folder_solid"
-            app:tint="#DDDDDD"
-            android:layout_marginBottom="16dp"/>
-
-        <TextView
-            android:id="@+id/tvEmptyTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="폴더가 비어있어요"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="#999999"/>
-
-        <TextView
-            android:id="@+id/tvEmptyMessage"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="파일이 없습니다."
-            android:textSize="14sp"
-            android:textColor="#BBBBBB"
-            android:layout_marginTop="8dp"/>
-    </LinearLayout>
-
-</LinearLayout>
+</RelativeLayout>
