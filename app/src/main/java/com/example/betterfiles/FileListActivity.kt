@@ -122,16 +122,37 @@ class FileListActivity : AppCompatActivity() {
         loadData(currentMode, rootPath)
     }
 
-    // ▼▼▼ [추가] 선택 모드 관련 로직 시작 ▼▼▼
+    // ▼▼▼ [수정] 선택 모드 관련 로직 (전체 선택 추가됨) ▼▼▼
 
     private fun setupSelectionEvents() {
         val btnCloseSelection: ImageView = findViewById(R.id.btnCloseSelection)
+        val btnSelectAll: ImageView = findViewById(R.id.btnSelectAll) // [추가] 전체선택 버튼 ID 연결
         val btnShareSelection: ImageView = findViewById(R.id.btnShareSelection)
         val btnDeleteSelection: ImageView = findViewById(R.id.btnDeleteSelection)
 
         btnCloseSelection.setOnClickListener { closeSelectionMode() }
+        btnSelectAll.setOnClickListener { toggleSelectAll() } // [추가] 클릭 리스너 연결
         btnShareSelection.setOnClickListener { shareSelectedFiles() }
         btnDeleteSelection.setOnClickListener { showDeleteSelectionDialog() }
+    }
+
+    // [추가] 전체 선택 / 해제 토글 로직
+    private fun toggleSelectAll() {
+        val currentList = adapter.currentList
+        if (currentList.isEmpty()) return
+
+        // 1. 현재 모든 항목이 선택되어 있는지 확인
+        val isAllSelected = currentList.all { it.isSelected }
+
+        // 2. 상태 반전 (모두 선택됨 -> 모두 해제 / 아니면 -> 모두 선택)
+        val newState = !isAllSelected
+
+        // 3. 리스트의 모든 항목 상태 변경
+        currentList.forEach { it.isSelected = newState }
+
+        // 4. 화면 갱신
+        adapter.notifyDataSetChanged()
+        updateSelectionUI()
     }
 
     private fun startSelectionMode(initialItem: FileItem) {

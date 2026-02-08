@@ -168,6 +168,18 @@
                 android:layout_marginStart="16dp"/>
 
             <ImageView
+                android:id="@+id/btnSelectAll"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_select_all"
+                app:tint="#673AB7"
+                android:layout_marginEnd="20dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="전체 선택"/>
+
+            <ImageView
                 android:id="@+id/btnShareSelection"
                 android:layout_width="24dp"
                 android:layout_height="24dp"
