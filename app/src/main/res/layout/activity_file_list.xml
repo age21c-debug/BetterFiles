@@ -136,6 +136,59 @@
                 android:focusable="true"/>
         </LinearLayout>
 
+        <LinearLayout
+            android:id="@+id/headerSelection"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:padding="16dp"
+            android:gravity="center_vertical"
+            android:background="#E3F2FD"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/btnCloseSelection"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_close"
+                app:tint="#1E88E5"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"/>
+
+            <TextView
+                android:id="@+id/tvSelectionCount"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="0개 선택됨"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#1E88E5"
+                android:layout_marginStart="16dp"/>
+
+            <ImageView
+                android:id="@+id/btnShareSelection"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@android:drawable/ic_menu_share"
+                app:tint="#1E88E5"
+                android:layout_marginEnd="20dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"/>
+
+            <ImageView
+                android:id="@+id/btnDeleteSelection"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@android:drawable/ic_menu_delete"
+                app:tint="#E53935"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"/>
+        </LinearLayout>
+
     </FrameLayout>
 
     <androidx.recyclerview.widget.RecyclerView

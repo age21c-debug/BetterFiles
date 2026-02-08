@@ -3,9 +3,11 @@ package com.example.betterfiles
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.text.format.Formatter
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
@@ -17,10 +19,19 @@ import java.util.Locale
 
 class FileAdapter(
     private val onClick: (FileItem) -> Unit,           // 파일 클릭 시 (열기)
-    private val onMoreClick: (View, FileItem) -> Unit  // [추가] 더보기 버튼 클릭 시 (팝업 메뉴)
+    private val onMoreClick: (View, FileItem) -> Unit, // 더보기 버튼 클릭 시
+    private val onLongClick: (FileItem) -> Unit,       // 롱클릭 시 (선택 모드 진입)
+    private val onSelectionChanged: () -> Unit         // 선택 상태 변경 알림
 ) : RecyclerView.Adapter<FileAdapter.FileViewHolder>() {
 
     private var files: List<FileItem> = emptyList()
+
+    // 선택 모드 상태 변수
+    var isSelectionMode = false
+
+    // 외부에서 현재 리스트에 접근할 수 있도록 프로퍼티 추가
+    val currentList: List<FileItem>
+        get() = files
 
     fun submitList(newFiles: List<FileItem>) {
         files = newFiles
@@ -42,43 +53,45 @@ class FileAdapter(
         private val tvName: TextView = itemView.findViewById(R.id.tvName)
         private val tvSize: TextView = itemView.findViewById(R.id.tvSize)
         private val ivIcon: ImageView = itemView.findViewById(R.id.ivIcon)
-        private val btnMore: ImageView = itemView.findViewById(R.id.btnMore) // [추가] 점 3개 버튼
+        private val btnMore: ImageView = itemView.findViewById(R.id.btnMore)
+        private val cbSelect: CheckBox = itemView.findViewById(R.id.cbSelect)
+
+        // ▼▼▼ [수정] 배경 리소스 ID를 안전하게 미리 가져옴 (Crash 해결 핵심) ▼▼▼
+        private val rippleResId: Int = with(TypedValue()) {
+            itemView.context.theme.resolveAttribute(android.R.attr.selectableItemBackground, this, true)
+            resourceId
+        }
 
         fun bind(item: FileItem) {
             val file = File(item.path)
             tvName.text = item.name
 
-            // 1. 아이콘 상태 초기화 (재사용 문제 방지)
+            // 1. 아이콘 상태 초기화
             Glide.with(itemView.context).clear(ivIcon)
             ivIcon.clearColorFilter()
+            ivIcon.setImageDrawable(null)
 
             // ------------------------------------------------------------
-            // 아이콘 결정 로직
+            // 기존 아이콘 결정 로직
             // ------------------------------------------------------------
             if (item.isDirectory) {
-                // [폴더]
                 ivIcon.setImageResource(R.drawable.ic_folder_solid)
             } else {
-                // [파일]
                 if (isImageFile(item.name) || isVideoFile(item.name)) {
-                    // 1) 이미지 & 동영상 -> 썸네일 로딩
                     Glide.with(itemView.context)
                         .load(file)
                         .centerCrop()
                         .placeholder(R.drawable.ic_file)
                         .into(ivIcon)
-                    ivIcon.clearColorFilter() // 틴트 제거
+                    ivIcon.clearColorFilter()
 
                 } else if (isApkFile(item.name)) {
-                    // 2) APK 파일 -> 실제 앱 아이콘 추출
                     val pm = itemView.context.packageManager
                     val packageInfo = pm.getPackageArchiveInfo(item.path, 0)
 
                     if (packageInfo != null) {
-                        // 중요: 아이콘을 가져오려면 소스 경로를 지정해줘야 함
                         packageInfo.applicationInfo.sourceDir = item.path
                         packageInfo.applicationInfo.publicSourceDir = item.path
-
                         val apkIcon = packageInfo.applicationInfo.loadIcon(pm)
 
                         Glide.with(itemView.context)
@@ -88,57 +101,89 @@ class FileAdapter(
                             .into(ivIcon)
                         ivIcon.clearColorFilter()
                     } else {
-                        // 분석 실패 시 (깨진 APK 등) -> 기본 안드로이드 로봇
                         ivIcon.setImageResource(R.drawable.ic_android)
                         ivIcon.setColorFilter(Color.parseColor("#3DDC84"))
                     }
 
                 } else if (isPdfFile(item.name)) {
-                    // 3) PDF 파일 -> 빨간색 아이콘
                     ivIcon.setImageResource(R.drawable.ic_pdf)
+                    if (itemView.resources.getIdentifier("ic_pdf", "drawable", itemView.context.packageName) == 0) {
+                        ivIcon.setImageResource(R.drawable.ic_file)
+                    }
                     ivIcon.setColorFilter(Color.parseColor("#F44336"))
 
                 } else if (isVoiceFile(item.name)) {
-                    // 4) 음성 녹음(.m4a) -> 청록색 마이크
                     ivIcon.setImageResource(R.drawable.ic_mic)
+                    if (itemView.resources.getIdentifier("ic_mic", "drawable", itemView.context.packageName) == 0) {
+                        ivIcon.setImageResource(R.drawable.ic_file)
+                    }
                     ivIcon.setColorFilter(Color.parseColor("#009688"))
 
                 } else if (isAudioFile(item.name)) {
-                    // 5) 일반 음악 -> 보라색 음표
                     ivIcon.setImageResource(R.drawable.ic_music_note)
+                    if (itemView.resources.getIdentifier("ic_music_note", "drawable", itemView.context.packageName) == 0) {
+                        ivIcon.setImageResource(R.drawable.ic_file)
+                    }
                     ivIcon.setColorFilter(Color.parseColor("#9C27B0"))
 
                 } else {
-                    // 6) 그 외 파일 -> 회색 기본 아이콘
                     ivIcon.setImageResource(R.drawable.ic_file)
                     ivIcon.setColorFilter(Color.parseColor("#5F6368"))
                 }
             }
 
             // ------------------------------------------------------------
-            // 텍스트(용량/날짜) 설정
+            // 텍스트 설정
             // ------------------------------------------------------------
             val dateStr = getFormattedDate(file.lastModified())
-
             if (item.isDirectory) {
-                // 폴더는 날짜만 표시
                 tvSize.text = dateStr
             } else {
-                // 파일은 "용량 • 날짜" 표시
                 val sizeStr = Formatter.formatFileSize(itemView.context, item.size)
                 tvSize.text = "$sizeStr • $dateStr"
             }
 
             // ------------------------------------------------------------
-            // 클릭 이벤트 설정
+            // ▼▼▼ [수정] 선택 모드 UI 로직 (배경 설정 안전하게 변경) ▼▼▼
             // ------------------------------------------------------------
+            if (isSelectionMode) {
+                btnMore.visibility = View.GONE
+                cbSelect.visibility = View.VISIBLE
+                cbSelect.isChecked = item.isSelected
 
-            // 1. 항목 전체 클릭 -> 파일 열기
-            itemView.setOnClickListener {
-                onClick(item)
+                if (item.isSelected) {
+                    itemView.setBackgroundColor(Color.parseColor("#E3F2FD")) // 선택됨: 파란색
+                } else {
+                    itemView.setBackgroundResource(rippleResId) // 선택안됨: 기본 물결 (에러 수정됨)
+                }
+            } else {
+                btnMore.visibility = View.VISIBLE
+                cbSelect.visibility = View.GONE
+                cbSelect.isChecked = false
+                itemView.setBackgroundResource(rippleResId) // 일반 모드: 기본 물결 (에러 수정됨)
             }
 
-            // 2. 점 3개 버튼 클릭 -> 팝업 메뉴 열기 (Activity로 이벤트 전달)
+            // ------------------------------------------------------------
+            // 클릭 이벤트 설정
+            // ------------------------------------------------------------
+            itemView.setOnClickListener {
+                if (isSelectionMode) {
+                    item.isSelected = !item.isSelected
+                    notifyItemChanged(adapterPosition)
+                    onSelectionChanged()
+                } else {
+                    onClick(item)
+                }
+            }
+
+            itemView.setOnLongClickListener {
+                if (!isSelectionMode) {
+                    onLongClick(item)
+                    return@setOnLongClickListener true
+                }
+                false
+            }
+
             btnMore.setOnClickListener { view ->
                 onMoreClick(view, item)
             }

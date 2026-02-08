@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.media.MediaScannerConnection
+import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.text.Editable
@@ -34,9 +35,11 @@ class FileListActivity : AppCompatActivity() {
 
     // 검색 작업 관리
     private var searchJob: Job? = null
-    // 검색 모드 상태 확인 변수
     private var isSearchMode: Boolean = false
     private var currentSearchQuery: String = ""
+
+    // [추가] 선택 모드 관리 변수
+    private var isSelectionMode: Boolean = false
 
     // 네비게이션 변수
     private var currentPath: String = ""
@@ -71,6 +74,7 @@ class FileListActivity : AppCompatActivity() {
         val rvFiles: RecyclerView = findViewById(R.id.rvFiles)
         val btnBack: ImageView = findViewById(R.id.btnBack)
 
+        // 3. 어댑터 설정 (롱클릭 및 선택 이벤트 연결)
         adapter = FileAdapter(
             onClick = { fileItem ->
                 if (fileItem.isDirectory) {
@@ -82,6 +86,14 @@ class FileListActivity : AppCompatActivity() {
             },
             onMoreClick = { view, fileItem ->
                 showFileOptionMenu(view, fileItem)
+            },
+            onLongClick = { fileItem ->
+                // [추가] 롱클릭 시 선택 모드 시작
+                startSelectionMode(fileItem)
+            },
+            onSelectionChanged = {
+                // [추가] 선택 개수 변경 시 UI 업데이트
+                updateSelectionUI()
             }
         )
         rvFiles.layoutManager = LinearLayoutManager(this)
@@ -91,9 +103,15 @@ class FileListActivity : AppCompatActivity() {
 
         setupHeaderEvents()
 
+        // [추가] 선택 모드 헤더 버튼들 이벤트 연결
+        setupSelectionEvents()
+
+        // 뒤로가기 버튼 처리 (우선순위: 선택모드 > 검색모드 > 일반)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (isSearchMode) {
+                if (isSelectionMode) {
+                    closeSelectionMode()
+                } else if (isSearchMode) {
                     closeSearchMode()
                 } else {
                     handleBackAction()
@@ -104,26 +122,130 @@ class FileListActivity : AppCompatActivity() {
         loadData(currentMode, rootPath)
     }
 
-    // ▼▼▼ [핵심 수정] 모드별 디폴트 값 차등 적용 ▼▼▼
+    // ▼▼▼ [추가] 선택 모드 관련 로직 시작 ▼▼▼
+
+    private fun setupSelectionEvents() {
+        val btnCloseSelection: ImageView = findViewById(R.id.btnCloseSelection)
+        val btnShareSelection: ImageView = findViewById(R.id.btnShareSelection)
+        val btnDeleteSelection: ImageView = findViewById(R.id.btnDeleteSelection)
+
+        btnCloseSelection.setOnClickListener { closeSelectionMode() }
+        btnShareSelection.setOnClickListener { shareSelectedFiles() }
+        btnDeleteSelection.setOnClickListener { showDeleteSelectionDialog() }
+    }
+
+    private fun startSelectionMode(initialItem: FileItem) {
+        if (isSelectionMode) return
+        isSelectionMode = true
+
+        // 롱클릭한 아이템을 먼저 선택 상태로 만듦
+        initialItem.isSelected = true
+
+        // 어댑터 모드 변경 및 갱신 (체크박스 보이기)
+        adapter.isSelectionMode = true
+        adapter.notifyDataSetChanged()
+
+        // 헤더 교체 (일반/검색 -> 선택 헤더)
+        findViewById<LinearLayout>(R.id.headerNormal).visibility = View.GONE
+        findViewById<LinearLayout>(R.id.headerSearch).visibility = View.GONE
+        findViewById<LinearLayout>(R.id.headerSelection).visibility = View.VISIBLE
+
+        updateSelectionUI()
+    }
+
+    private fun closeSelectionMode() {
+        isSelectionMode = false
+
+        // 모든 항목 선택 해제
+        adapter.currentList.forEach { it.isSelected = false }
+        adapter.isSelectionMode = false
+        adapter.notifyDataSetChanged()
+
+        // 헤더 복구
+        findViewById<LinearLayout>(R.id.headerSelection).visibility = View.GONE
+        if (isSearchMode) {
+            findViewById<LinearLayout>(R.id.headerSearch).visibility = View.VISIBLE
+        } else {
+            findViewById<LinearLayout>(R.id.headerNormal).visibility = View.VISIBLE
+        }
+    }
+
+    private fun updateSelectionUI() {
+        val count = adapter.currentList.count { it.isSelected }
+        val tvSelectionCount: TextView = findViewById(R.id.tvSelectionCount)
+        tvSelectionCount.text = "${count}개 선택됨"
+    }
+
+    private fun showDeleteSelectionDialog() {
+        val selectedItems = adapter.currentList.filter { it.isSelected }
+        if (selectedItems.isEmpty()) return
+
+        AlertDialog.Builder(this)
+            .setTitle("파일 삭제")
+            .setMessage("${selectedItems.size}개의 항목을 삭제하시겠습니까?")
+            .setPositiveButton("삭제") { _, _ -> deleteSelectedFiles(selectedItems) }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    private fun deleteSelectedFiles(items: List<FileItem>) {
+        var deletedCount = 0
+        val pathsToScan = mutableListOf<String>()
+
+        items.forEach { item ->
+            val file = File(item.path)
+            if (file.exists() && file.delete()) {
+                deletedCount++
+                pathsToScan.add(file.absolutePath)
+            }
+        }
+
+        if (deletedCount > 0) {
+            Toast.makeText(this, "${deletedCount}개 삭제되었습니다.", Toast.LENGTH_SHORT).show()
+            MediaScannerConnection.scanFile(this, pathsToScan.toTypedArray(), null, null)
+            closeSelectionMode()
+            loadData(currentMode, currentPath)
+        } else {
+            Toast.makeText(this, "삭제 실패. 권한을 확인하세요.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun shareSelectedFiles() {
+        val selectedItems = adapter.currentList.filter { it.isSelected }
+        if (selectedItems.isEmpty()) return
+
+        val uris = ArrayList<Uri>()
+
+        selectedItems.forEach { item ->
+            val file = File(item.path)
+            val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
+            uris.add(uri)
+        }
+
+        // MIME 타입 결정 (모두 이미지면 image/*, 아니면 */*)
+        val mimeType = if (selectedItems.all { it.mimeType.startsWith("image/") }) "image/*"
+        else if (selectedItems.all { it.mimeType.startsWith("video/") }) "video/*"
+        else "*/*"
+
+        try {
+            val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = mimeType
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(intent, "파일 공유"))
+        } catch (e: Exception) {
+            Toast.makeText(this, "공유할 수 없습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+    // ▲▲▲ 선택 모드 관련 로직 끝 ▲▲▲
+
     private fun loadSavedSortSettings() {
         val sortKey = "sort_mode_$currentMode"
         val ascKey = "is_ascending_$currentMode"
+        val defaultSortMode = if (currentMode == "folder") "name" else "date"
+        val defaultIsAscending = currentMode == "folder"
 
-        // 디폴트 값 결정 로직
-        val defaultSortMode: String
-        val defaultIsAscending: Boolean
-
-        if (currentMode == "folder") {
-            // 폴더 모드(내장 메모리): 기본값 '이름 오름차순' (가나다순)
-            defaultSortMode = "name"
-            defaultIsAscending = true
-        } else {
-            // 카테고리 모드(이미지, 비디오, 다운로드 등): 기본값 '날짜 내림차순' (최신순)
-            defaultSortMode = "date"
-            defaultIsAscending = false
-        }
-
-        // 저장된 값이 없으면 위의 디폴트 값을 사용
         currentSortMode = prefs.getString(sortKey, defaultSortMode) ?: defaultSortMode
         isAscending = prefs.getBoolean(ascKey, defaultIsAscending)
     }
@@ -132,7 +254,6 @@ class FileListActivity : AppCompatActivity() {
         val editor = prefs.edit()
         val sortKey = "sort_mode_$currentMode"
         val ascKey = "is_ascending_$currentMode"
-
         editor.putString(sortKey, currentSortMode)
         editor.putBoolean(ascKey, isAscending)
         editor.apply()
@@ -153,11 +274,8 @@ class FileListActivity : AppCompatActivity() {
         btnSort.setOnClickListener { view -> showSortMenu(view) }
         btnNewFolder.setOnClickListener { showCreateFolderDialog() }
 
-        // 검색 버튼 클릭
         btnSearch.setOnClickListener {
             isSearchMode = true
-
-            // 검색 진입 시: 정렬을 "이름 오름차순"으로 강제 초기화 (임시)
             currentSortMode = "name"
             isAscending = true
 
@@ -170,10 +288,7 @@ class FileListActivity : AppCompatActivity() {
             imm.showSoftInput(etSearch, InputMethodManager.SHOW_IMPLICIT)
         }
 
-        // 닫기 버튼 클릭
-        btnCloseSearch.setOnClickListener {
-            closeSearchMode()
-        }
+        btnCloseSearch.setOnClickListener { closeSearchMode() }
 
         etSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -187,7 +302,6 @@ class FileListActivity : AppCompatActivity() {
 
     private fun performSearch(query: String) {
         searchJob?.cancel()
-
         if (query.isEmpty()) {
             lifecycleScope.launch {
                 val rawFiles = when (currentMode) {
@@ -220,7 +334,6 @@ class FileListActivity : AppCompatActivity() {
 
     private fun closeSearchMode() {
         isSearchMode = false
-        // 검색 종료 시: 해당 모드의 원래 설정값 복구
         loadSavedSortSettings()
 
         val headerNormal: LinearLayout = findViewById(R.id.headerNormal)
