@@ -4,17 +4,23 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.media.MediaScannerConnection
+import android.media.MediaScannerConnection // [복구됨] 이 줄이 빠져서 에러가 났습니다
+import android.media.ThumbnailUtils
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.Formatter
+import android.util.Size
 import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import android.webkit.MimeTypeMap
 import android.widget.Button
 import android.widget.EditText
 import android.widget.HorizontalScrollView
@@ -27,9 +33,13 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.core.content.FileProvider
+import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
+import androidx.core.view.GravityCompat
+import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.navigation.NavigationView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -43,6 +53,10 @@ class FileListActivity : AppCompatActivity() {
 
     private lateinit var adapter: FileAdapter
     private lateinit var repository: FileRepository
+
+    // 드로어(사이드 메뉴) 관련 변수
+    private lateinit var drawerLayout: DrawerLayout
+    private lateinit var navView: NavigationView
 
     // 데이터 로딩 작업 관리
     private var loadJob: Job? = null
@@ -73,6 +87,12 @@ class FileListActivity : AppCompatActivity() {
         repository = FileRepository(this)
         prefs = getSharedPreferences("BetterFilesPrefs", Context.MODE_PRIVATE)
 
+        // 1. 뷰 초기화
+        drawerLayout = findViewById(R.id.drawerLayout)
+        navView = findViewById(R.id.navView)
+        val rvFiles: RecyclerView = findViewById(R.id.rvFiles)
+        val btnBack: ImageView = findViewById(R.id.btnBack)
+
         val intentTitle = intent.getStringExtra("title") ?: "파일"
         currentMode = intent.getStringExtra("mode") ?: "folder"
         val intentPath = intent.getStringExtra("path") ?: Environment.getExternalStorageDirectory().absolutePath
@@ -83,9 +103,7 @@ class FileListActivity : AppCompatActivity() {
 
         loadSavedSortSettings()
 
-        val rvFiles: RecyclerView = findViewById(R.id.rvFiles)
-        val btnBack: ImageView = findViewById(R.id.btnBack)
-
+        // 2. 어댑터 설정
         adapter = FileAdapter(
             onClick = { fileItem ->
                 if (fileItem.isDirectory) {
@@ -112,15 +130,20 @@ class FileListActivity : AppCompatActivity() {
         rvFiles.layoutManager = LinearLayoutManager(this)
         rvFiles.adapter = adapter
 
-        btnBack.setOnClickListener { handleBackAction() }
+        // 3. 드로어 설정
+        setupDrawer()
 
+        // 4. 이벤트 설정
+        btnBack.setOnClickListener { handleHeaderNavigationClick() }
         setupHeaderEvents()
         setupSelectionEvents()
         setupPasteEvents()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (isSelectionMode) {
+                if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+                    drawerLayout.closeDrawer(GravityCompat.START)
+                } else if (isSelectionMode) {
                     closeSelectionMode()
                 } else if (isSearchMode) {
                     closeSearchMode()
@@ -133,6 +156,138 @@ class FileListActivity : AppCompatActivity() {
         loadData(currentMode, rootPath)
     }
 
+    // ▼▼▼ 드로어(즐겨찾기) 관련 로직 ▼▼▼
+
+    private fun setupDrawer() {
+        // 1. 기본 틴트(색상 덮어쓰기) 제거 -> 우리가 원하는 색(노란색, 썸네일 등)을 표시하기 위함
+        navView.itemIconTintList = null
+
+        // 2. 상단 고정 메뉴(내장 메모리, 다운로드) 아이콘을 회색으로 수동 설정
+        val menu = navView.menu
+        val greyColor = Color.parseColor("#757575") // 기본 회색
+
+        val internalItem = menu.findItem(R.id.nav_internal_storage)
+        internalItem?.icon?.mutate()?.setTint(greyColor)
+
+        val downloadItem = menu.findItem(R.id.nav_download)
+        downloadItem?.icon?.mutate()?.setTint(greyColor)
+
+        // 3. 클릭 리스너 (기존 코드와 동일)
+        navView.setNavigationItemSelectedListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.nav_internal_storage -> {
+                    loadData("folder", rootPath)
+                }
+                R.id.nav_download -> {
+                    val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+                    loadData("folder", downloadPath)
+                }
+            }
+            drawerLayout.closeDrawer(GravityCompat.START)
+            true
+        }
+        updateDrawerMenu()
+    }
+
+    private fun updateDrawerMenu() {
+        val menu = navView.menu
+        val favoritesGroup = menu.findItem(R.id.nav_favorites_section)?.subMenu ?: return
+        favoritesGroup.clear()
+
+        val favorites = FavoritesManager.getAll(this)
+
+        if (favorites.isEmpty()) {
+            val item = favoritesGroup.add(0, 0, 0, "(즐겨찾기 없음)")
+            item.isEnabled = false
+        } else {
+            favorites.forEachIndexed { index, path ->
+                val file = File(path)
+                val item = favoritesGroup.add(0, index + 100, 0, file.name)
+
+                if (file.isDirectory) {
+                    // [수정됨] 폴더: 파란색 -> 노란색 (#FFC107) 변경
+                    val drawable = getDrawable(R.drawable.ic_folder_solid)?.mutate()
+                    drawable?.setTint(Color.parseColor("#FFC107")) // 노란색 적용
+                    item.icon = drawable
+
+                    item.setOnMenuItemClickListener {
+                        loadData("folder", path)
+                        drawerLayout.closeDrawer(GravityCompat.START)
+                        true
+                    }
+                } else {
+                    // [파일] 우선 기본 아이콘 및 색상 설정
+                    val iconRes = getFileIconResource(file.name)
+                    val iconColor = getFileIconColor(file.name) ?: Color.GRAY
+                    val drawable = getDrawable(iconRes)?.mutate()
+                    drawable?.setTint(iconColor)
+                    item.icon = drawable
+
+                    // [추가됨] 썸네일: 이미지/비디오는 비동기로 로딩하여 아이콘 교체
+                    if (isImageFile(file.name) || isVideoFile(file.name)) {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            val thumbnail = loadThumbnail(file) // 아래에 추가할 함수 호출
+                            if (thumbnail != null) {
+                                withContext(Dispatchers.Main) {
+                                    // 둥근 모서리 썸네일 생성
+                                    val roundedDrawable = RoundedBitmapDrawableFactory.create(resources, thumbnail)
+                                    roundedDrawable.cornerRadius = 16f
+                                    item.icon = roundedDrawable
+                                }
+                            }
+                        }
+                    }
+
+                    item.setOnMenuItemClickListener {
+                        openFile(file)
+                        drawerLayout.closeDrawer(GravityCompat.START)
+                        true
+                    }
+                }
+            }
+        }
+    }
+
+    // [추가] 썸네일 로딩 함수
+    // [추가] 썸네일 로딩 헬퍼 함수
+    private fun loadThumbnail(file: File): Bitmap? {
+        return try {
+            val size = Size(144, 144) // 메뉴 아이콘에 적당한 크기
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ThumbnailUtils.createImageThumbnail(file, size, null)
+            } else {
+                // 구버전 호환 (간단한 비트맵 디코딩)
+                val options = BitmapFactory.Options().apply { inSampleSize = 4 }
+                if (isVideoFile(file.name)) {
+                    ThumbnailUtils.createVideoThumbnail(file.absolutePath, android.provider.MediaStore.Video.Thumbnails.MINI_KIND)
+                } else {
+                    BitmapFactory.decodeFile(file.absolutePath, options)
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun handleHeaderNavigationClick() {
+        if (currentMode == "folder" && currentPath == rootPath) {
+            drawerLayout.openDrawer(GravityCompat.START)
+        } else {
+            handleBackAction()
+        }
+    }
+
+    private fun updateHeaderIcon() {
+        val btnBack: ImageView = findViewById(R.id.btnBack)
+        if (currentMode == "folder" && currentPath == rootPath) {
+            btnBack.setImageResource(R.drawable.ic_menu)
+        } else {
+            btnBack.setImageResource(R.drawable.ic_arrow_back)
+        }
+    }
+    // ▲▲▲ 드로어 로직 끝 ▲▲▲
+
+
     private fun handleFileClick(fileItem: FileItem) {
         val file = File(fileItem.path)
         if (file.extension.equals("zip", ignoreCase = true)) {
@@ -142,7 +297,43 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // 압축 해제 다이얼로그
+    // [함수 1] 메인 리스트에서 클릭 시 (FileItem 사용)
+    private fun openFile(fileItem: FileItem) {
+        try {
+            val file = File(fileItem.path)
+            val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, fileItem.mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "이 파일을 열 수 있는 앱이 없습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // [함수 2] 즐겨찾기 등에서 파일 경로만으로 실행 (File 사용)
+    private fun openFile(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
+            val mimeType = getMimeType(file)
+
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "이 파일을 열 수 있는 앱이 없습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // [필수] 파일 확장자로 MIME Type 찾기
+    private fun getMimeType(file: File): String {
+        val extension = file.extension.lowercase(Locale.getDefault())
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
+    }
+
     private fun showUnzipDialog(zipFile: File) {
         val view = layoutInflater.inflate(R.layout.dialog_zip_preview, null)
         val tvName: TextView = view.findViewById(R.id.tvZipName)
@@ -299,8 +490,6 @@ class FileListActivity : AppCompatActivity() {
             }
         }
     }
-
-    // --- (이하 기존 코드 동일) ---
 
     private fun setupPasteEvents() {
         val btnCancelPaste: Button = findViewById(R.id.btnCancelPaste)
@@ -850,7 +1039,6 @@ class FileListActivity : AppCompatActivity() {
                 val folderCount = sortedFiles.count { it.isDirectory }
                 val fileCount = sortedFiles.count { !it.isDirectory }
 
-                // [수정됨] 0개인 항목은 생략하는 로직 적용
                 val textParts = mutableListOf<String>()
                 if (folderCount > 0) textParts.add("${folderCount}개 폴더")
                 if (fileCount > 0) textParts.add("${fileCount}개 파일")
@@ -909,6 +1097,9 @@ class FileListActivity : AppCompatActivity() {
 
         updatePasteBarUI()
 
+        // [추가] 헤더 아이콘 갱신 (햄버거 <-> 뒤로가기)
+        updateHeaderIcon()
+
         // 새로운 로딩 작업 시작
         loadJob = lifecycleScope.launch {
             val rawFiles = when (mode) {
@@ -926,10 +1117,30 @@ class FileListActivity : AppCompatActivity() {
     private fun showFileOptionMenu(view: View, fileItem: FileItem) {
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_file_item, popup.menu)
+
+        // 즐겨찾기 메뉴 설정
+        val favItem = popup.menu.findItem(R.id.action_favorite)
+        val isFav = FavoritesManager.isFavorite(this, fileItem.path)
+
+        // [변경] 폴더/파일 구분 없이 즐겨찾기 메뉴 활성화
+        favItem.isVisible = true
+        favItem.title = if (isFav) "즐겨찾기 해제" else "즐겨찾기 추가"
+
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
+                R.id.action_favorite -> {
+                    if (FavoritesManager.isFavorite(this, fileItem.path)) {
+                        FavoritesManager.remove(this, fileItem.path)
+                        Toast.makeText(this, "즐겨찾기 해제됨", Toast.LENGTH_SHORT).show()
+                    } else {
+                        FavoritesManager.add(this, fileItem.path)
+                        Toast.makeText(this, "즐겨찾기 추가됨", Toast.LENGTH_SHORT).show()
+                    }
+                    updateDrawerMenu() // 메뉴 갱신
+                    true
+                }
                 R.id.action_share -> { shareFile(fileItem); true }
-                R.id.action_zip -> { showZipDialog(listOf(fileItem)); true } // [추가] 개별 파일 압축
+                R.id.action_zip -> { showZipDialog(listOf(fileItem)); true }
                 R.id.action_rename -> { showRenameDialog(fileItem); true }
                 R.id.action_delete -> { showDeleteDialog(fileItem); true }
                 R.id.action_details -> { showFileDetailsDialog(fileItem); true }
@@ -1057,20 +1268,6 @@ class FileListActivity : AppCompatActivity() {
             val parentFile = File(currentPath).parentFile
             if (parentFile != null) loadData("folder", parentFile.absolutePath) else finish()
         } else { finish() }
-    }
-
-    private fun openFile(fileItem: FileItem) {
-        try {
-            val file = File(fileItem.path)
-            val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, fileItem.mimeType)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(intent)
-        } catch (e: Exception) {
-            Toast.makeText(this, "이 파일을 열 수 있는 앱이 없습니다.", Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun showCreateFolderDialog() {

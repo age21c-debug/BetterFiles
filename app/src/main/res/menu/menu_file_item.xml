@@ -1,25 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
+        android:id="@+id/action_favorite"
+        android:title="즐겨찾기 추가"
+        android:icon="@drawable/ic_star" />
+
+    <item
         android:id="@+id/action_share"
         android:title="공유"
         android:icon="@android:drawable/ic_menu_share"/>
-
     <item
         android:id="@+id/action_zip"
         android:title="압축"
-        android:icon="@android:drawable/ic_menu_agenda" />
-
+        android:icon="@drawable/ic_zip" />
     <item
         android:id="@+id/action_rename"
         android:title="이름 변경"
         android:icon="@android:drawable/ic_menu_edit" />
-
     <item
         android:id="@+id/action_delete"
         android:title="삭제"
         android:icon="@android:drawable/ic_menu_delete"/>
-
     <item
         android:id="@+id/action_details"
         android:title="상세 정보"
