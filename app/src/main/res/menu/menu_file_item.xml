@@ -6,6 +6,11 @@
         android:icon="@android:drawable/ic_menu_share"/>
 
     <item
+        android:id="@+id/action_zip"
+        android:title="압축"
+        android:icon="@android:drawable/ic_menu_agenda" />
+
+    <item
         android:id="@+id/action_rename"
         android:title="이름 변경"
         android:icon="@android:drawable/ic_menu_edit" />

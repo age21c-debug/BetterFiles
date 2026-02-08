@@ -96,7 +96,7 @@ class FileListActivity : AppCompatActivity() {
                     }
                     loadData("folder", fileItem.path)
                 } else {
-                    openFile(fileItem)
+                    handleFileClick(fileItem)
                 }
             },
             onMoreClick = { view, fileItem ->
@@ -137,6 +137,52 @@ class FileListActivity : AppCompatActivity() {
         })
 
         loadData(currentMode, rootPath)
+    }
+
+    // 파일 클릭 핸들러 (Zip 해제 로직 추가)
+    private fun handleFileClick(fileItem: FileItem) {
+        val file = File(fileItem.path)
+        if (file.extension.equals("zip", ignoreCase = true)) {
+            showUnzipDialog(file)
+        } else {
+            openFile(fileItem)
+        }
+    }
+
+    private fun showUnzipDialog(zipFile: File) {
+        AlertDialog.Builder(this)
+            .setTitle("압축 해제")
+            .setMessage("'${zipFile.name}'의 압축을 현재 폴더에 풀까요?")
+            .setPositiveButton("해제") { _, _ ->
+                performUnzip(zipFile)
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    private fun performUnzip(zipFile: File) {
+        val targetDir = File(currentPath)
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // 같은 이름의 폴더 생성 후 그 안에 풀기 (깔끔하게)
+                val folderName = zipFile.nameWithoutExtension
+                val extractDir = getUniqueFile(targetDir, folderName) // 이름 중복 시 (1) 붙임
+
+                ZipManager.unzip(zipFile, extractDir)
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@FileListActivity, "압축 해제 완료", Toast.LENGTH_SHORT).show()
+                    MediaScannerConnection.scanFile(this@FileListActivity, arrayOf(extractDir.absolutePath), null, null)
+                    loadData(currentMode, currentPath)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@FileListActivity, "압축 해제 실패: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     // ▼▼▼ 복사/이동/붙여넣기 관련 로직 ▼▼▼
@@ -284,8 +330,6 @@ class FileListActivity : AppCompatActivity() {
         Toast.makeText(this, "$action 할 위치로 가서 '$action' 버튼을 누르세요.", Toast.LENGTH_SHORT).show()
     }
 
-    // ▲▲▲ 복사/이동/붙여넣기 로직 끝 ▲▲▲
-
     // ▼▼▼ 선택 모드 관련 로직 ▼▼▼
 
     private fun setupSelectionEvents() {
@@ -307,15 +351,12 @@ class FileListActivity : AppCompatActivity() {
         btnDeleteSelection.setOnClickListener { showDeleteSelectionDialog() }
     }
 
-    // [수정됨] 선택 모드 더보기 메뉴 (개수에 따라 상세정보 표시 여부 결정)
+    // 선택 모드 더보기 메뉴 (개수에 따라 상세정보 표시 여부 결정)
     private fun showSelectionMoreMenu(view: View) {
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_selection_more, popup.menu)
 
-        // 선택된 항목 개수 확인
         val selectedItems = adapter.currentList.filter { it.isSelected }
-
-        // 1개일 때만 '상세 정보' 메뉴 보이기
         val detailsItem = popup.menu.findItem(R.id.action_selection_details)
         detailsItem.isVisible = selectedItems.size == 1
 
@@ -329,8 +370,11 @@ class FileListActivity : AppCompatActivity() {
                     copyOrMoveSelected(isMove = true)
                     true
                 }
+                R.id.action_zip -> {
+                    showZipDialog(selectedItems)
+                    true
+                }
                 R.id.action_selection_details -> {
-                    // 선택된 1개의 항목에 대해 상세 정보 표시
                     if (selectedItems.size == 1) {
                         showFileDetailsDialog(selectedItems.first())
                     }
@@ -340,6 +384,68 @@ class FileListActivity : AppCompatActivity() {
             }
         }
         popup.show()
+    }
+
+    private fun showZipDialog(selectedItems: List<FileItem>) {
+        if (selectedItems.isEmpty()) return
+
+        val editText = EditText(this)
+        val defaultName = if (selectedItems.size == 1) {
+            File(selectedItems.first().path).nameWithoutExtension
+        } else {
+            File(currentPath).name // 현재 폴더 이름
+        }
+        editText.setText(defaultName)
+        editText.selectAll()
+
+        val container = android.widget.FrameLayout(this)
+        val params = android.widget.FrameLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        params.leftMargin = 50; params.rightMargin = 50
+        editText.layoutParams = params
+        container.addView(editText)
+
+        AlertDialog.Builder(this)
+            .setTitle("압축하기")
+            .setMessage("${selectedItems.size}개 항목을 압축합니다.")
+            .setView(container)
+            .setPositiveButton("압축") { _, _ ->
+                val name = editText.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    performZip(selectedItems, name)
+                }
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    private fun performZip(items: List<FileItem>, zipName: String) {
+        val targetDir = File(currentPath)
+        val finalName = if (zipName.endsWith(".zip", ignoreCase = true)) zipName else "$zipName.zip"
+        val zipFile = getUniqueFile(targetDir, finalName)
+
+        val filesToZip = items.map { File(it.path) }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                ZipManager.zip(filesToZip, zipFile)
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@FileListActivity, "압축 완료: ${zipFile.name}", Toast.LENGTH_SHORT).show()
+                    MediaScannerConnection.scanFile(this@FileListActivity, arrayOf(zipFile.absolutePath), null, null)
+
+                    closeSelectionMode()
+                    loadData(currentMode, currentPath)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@FileListActivity, "압축 실패: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun toggleSelectAll() {
@@ -702,12 +808,14 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
+    // [수정됨] 개별 파일 메뉴 옵션 핸들러
     private fun showFileOptionMenu(view: View, fileItem: FileItem) {
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_file_item, popup.menu)
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.action_share -> { shareFile(fileItem); true }
+                R.id.action_zip -> { showZipDialog(listOf(fileItem)); true } // [추가] 개별 파일 압축
                 R.id.action_rename -> { showRenameDialog(fileItem); true }
                 R.id.action_delete -> { showDeleteDialog(fileItem); true }
                 R.id.action_details -> { showFileDetailsDialog(fileItem); true }
@@ -717,7 +825,6 @@ class FileListActivity : AppCompatActivity() {
         popup.show()
     }
 
-    // [수정됨] 상세 정보 다이얼로그 (권한 정보 제거)
     private fun showFileDetailsDialog(fileItem: FileItem) {
         val view = layoutInflater.inflate(R.layout.dialog_file_details, null)
         val file = File(fileItem.path)
@@ -728,16 +835,12 @@ class FileListActivity : AppCompatActivity() {
         val tvDate: TextView = view.findViewById(R.id.tvDetailDate)
         val tvPath: TextView = view.findViewById(R.id.tvDetailPath)
 
-        // 권한 TextView 참조 제거됨
-
         tvName.text = file.name
         tvPath.text = file.absolutePath
 
-        // 수정 날짜
         val dateFormat = SimpleDateFormat("yyyy. MM. dd. HH:mm", Locale.getDefault())
         tvDate.text = dateFormat.format(Date(file.lastModified()))
 
-        // 종류 및 크기
         if (file.isDirectory) {
             tvType.text = "폴더"
             val items = file.list()?.size ?: 0
@@ -747,8 +850,6 @@ class FileListActivity : AppCompatActivity() {
             tvType.text = if (extension.isNotEmpty()) "$extension 파일" else "파일"
             tvSize.text = Formatter.formatFileSize(this, file.length())
         }
-
-        // 권한 정보 설정 로직 제거됨
 
         AlertDialog.Builder(this)
             .setTitle("상세 정보")
