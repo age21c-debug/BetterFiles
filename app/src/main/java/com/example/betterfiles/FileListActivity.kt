@@ -13,6 +13,7 @@ import android.text.TextWatcher
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupMenu
@@ -38,7 +39,7 @@ class FileListActivity : AppCompatActivity() {
     private var isSearchMode: Boolean = false
     private var currentSearchQuery: String = ""
 
-    // [추가] 선택 모드 관리 변수
+    // 선택 모드 관리 변수
     private var isSelectionMode: Boolean = false
 
     // 네비게이션 변수
@@ -88,11 +89,11 @@ class FileListActivity : AppCompatActivity() {
                 showFileOptionMenu(view, fileItem)
             },
             onLongClick = { fileItem ->
-                // [추가] 롱클릭 시 선택 모드 시작
+                // 롱클릭 시 선택 모드 시작
                 startSelectionMode(fileItem)
             },
             onSelectionChanged = {
-                // [추가] 선택 개수 변경 시 UI 업데이트
+                // 선택 개수 변경 시 UI 업데이트
                 updateSelectionUI()
             }
         )
@@ -103,7 +104,7 @@ class FileListActivity : AppCompatActivity() {
 
         setupHeaderEvents()
 
-        // [추가] 선택 모드 헤더 버튼들 이벤트 연결
+        // 선택 모드 헤더 버튼들 이벤트 연결
         setupSelectionEvents()
 
         // 뒤로가기 버튼 처리 (우선순위: 선택모드 > 검색모드 > 일반)
@@ -122,21 +123,21 @@ class FileListActivity : AppCompatActivity() {
         loadData(currentMode, rootPath)
     }
 
-    // ▼▼▼ [수정] 선택 모드 관련 로직 (전체 선택 추가됨) ▼▼▼
+    // ▼▼▼ 선택 모드 관련 로직 ▼▼▼
 
     private fun setupSelectionEvents() {
         val btnCloseSelection: ImageView = findViewById(R.id.btnCloseSelection)
-        val btnSelectAll: ImageView = findViewById(R.id.btnSelectAll) // [추가] 전체선택 버튼 ID 연결
+        val btnSelectAll: ImageView = findViewById(R.id.btnSelectAll)
         val btnShareSelection: ImageView = findViewById(R.id.btnShareSelection)
         val btnDeleteSelection: ImageView = findViewById(R.id.btnDeleteSelection)
 
         btnCloseSelection.setOnClickListener { closeSelectionMode() }
-        btnSelectAll.setOnClickListener { toggleSelectAll() } // [추가] 클릭 리스너 연결
+        btnSelectAll.setOnClickListener { toggleSelectAll() }
         btnShareSelection.setOnClickListener { shareSelectedFiles() }
         btnDeleteSelection.setOnClickListener { showDeleteSelectionDialog() }
     }
 
-    // [추가] 전체 선택 / 해제 토글 로직
+    // 전체 선택 / 해제 토글 로직
     private fun toggleSelectAll() {
         val currentList = adapter.currentList
         if (currentList.isEmpty()) return
@@ -452,18 +453,50 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
+    // ▼▼▼ [수정됨] loadData: 경로 표시 로직 추가됨 ▼▼▼
     private fun loadData(mode: String, path: String) {
         currentMode = mode
         currentPath = path
+
         val tvTitle = findViewById<TextView>(R.id.tvPageTitle)
         val btnNewFolder = findViewById<ImageView>(R.id.btnNewFolder)
 
+        // 경로 표시 뷰 바인딩 (XML에 추가된 뷰들)
+        val scrollViewPath = findViewById<HorizontalScrollView>(R.id.scrollViewPath)
+        val tvPathIndicator = findViewById<TextView>(R.id.tvPathIndicator)
+
         if (mode == "folder") {
-            if (path == rootPath) tvTitle.text = rootTitle else tvTitle.text = File(path).name
             btnNewFolder.visibility = View.VISIBLE
+
+            // 1. 루트 경로인지 확인
+            if (path == rootPath) {
+                // 루트면 제목만 보여주고 경로는 숨김
+                tvTitle.text = rootTitle
+                if (scrollViewPath != null) scrollViewPath.visibility = View.GONE
+            } else {
+                // 하위 폴더면 제목은 '현재폴더명', 위쪽 경로 표시줄 활성화
+                tvTitle.text = File(path).name
+
+                if (scrollViewPath != null && tvPathIndicator != null) {
+                    scrollViewPath.visibility = View.VISIBLE
+
+                    // 2. 경로 문자열 생성 (예: 내장 메모리 > DCIM > Camera)
+                    val relativePath = path.removePrefix(rootPath)
+                    // 슬래시(/)를 화살표( > )로 변경하여 표시
+                    val displayPath = "$rootTitle${relativePath.replace("/", " > ")}"
+                    tvPathIndicator.text = displayPath
+
+                    // 3. 스크롤을 맨 오른쪽(현재 위치)으로 이동
+                    scrollViewPath.post {
+                        scrollViewPath.fullScroll(View.FOCUS_RIGHT)
+                    }
+                }
+            }
         } else {
+            // 카테고리 모드 (이미지, 비디오 등)에서는 경로 표시 안 함
             tvTitle.text = rootTitle
             btnNewFolder.visibility = View.GONE
+            if (scrollViewPath != null) scrollViewPath.visibility = View.GONE
         }
 
         lifecycleScope.launch {
