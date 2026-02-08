@@ -6,6 +6,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
@@ -79,5 +80,39 @@ object ZipManager {
                 }
             }
         }
+    }
+
+    // [추가됨] Zip 파일 정보 미리보기용 데이터 클래스
+    data class ZipPreviewInfo(
+        val fileCount: Int,
+        val totalSize: Long,
+        val fileNames: List<String>
+    )
+
+    // [추가됨] Zip 파일 헤더만 읽어서 정보 반환 (압축 해제 안 함)
+    fun getZipInfo(zipFile: File): ZipPreviewInfo {
+        var count = 0
+        var size = 0L
+        val names = mutableListOf<String>()
+
+        // ZipFile 클래스를 사용하면 스트림을 끝까지 읽지 않고도 엔트리 정보를 빠르게 가져올 수 있습니다.
+        ZipFile(zipFile).use { zip ->
+            val entries = zip.entries()
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                count++
+
+                if (entry.size != -1L) {
+                    size += entry.size // 압축 해제 시 크기 누적
+                }
+
+                // 미리보기용 파일명은 최대 10개까지만 저장 (메모리 절약)
+                if (names.size < 10) {
+                    names.add(entry.name)
+                }
+            }
+        }
+
+        return ZipPreviewInfo(count, size, names)
     }
 }

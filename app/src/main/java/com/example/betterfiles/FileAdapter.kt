@@ -28,7 +28,7 @@ class FileAdapter(
     // 선택 모드 상태 변수
     var isSelectionMode = false
 
-    // [추가] 복사/이동(붙여넣기 대기) 모드 상태 변수
+    // 복사/이동(붙여넣기 대기) 모드 상태 변수
     var isPasteMode = false
 
     // 외부에서 현재 리스트에 접근할 수 있도록 프로퍼티 추가
@@ -129,6 +129,11 @@ class FileAdapter(
                     }
                     ivIcon.setColorFilter(Color.parseColor("#9C27B0"))
 
+                } else if (isZipFile(item.name)) {
+                    // [추가됨] 압축 파일 아이콘 처리
+                    ivIcon.setImageResource(R.drawable.ic_zip)
+                    ivIcon.setColorFilter(Color.parseColor("#FFC107")) // Amber (Yellow)
+
                 } else {
                     ivIcon.setImageResource(R.drawable.ic_file)
                     ivIcon.setColorFilter(Color.parseColor("#5F6368"))
@@ -166,7 +171,7 @@ class FileAdapter(
                 cbSelect.isChecked = false
                 itemView.setBackgroundResource(rippleResId)
 
-                // [수정됨] 붙여넣기 모드(isPasteMode)일 때는 더보기 버튼 숨김
+                // 붙여넣기 모드(isPasteMode)일 때는 더보기 버튼 숨김
                 if (isPasteMode) {
                     btnMore.visibility = View.GONE
                 } else {
@@ -231,6 +236,13 @@ class FileAdapter(
 
         private fun isPdfFile(name: String): Boolean {
             return name.lowercase().endsWith(".pdf")
+        }
+
+        // [추가됨] 압축 파일 판별 함수
+        private fun isZipFile(name: String): Boolean {
+            val lower = name.lowercase()
+            return lower.endsWith(".zip") || lower.endsWith(".rar") || lower.endsWith(".7z") ||
+                    lower.endsWith(".tar") || lower.endsWith(".gz")
         }
 
         private fun getFormattedDate(time: Long): String {

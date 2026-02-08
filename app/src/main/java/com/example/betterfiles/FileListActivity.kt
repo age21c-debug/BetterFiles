@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Color
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Bundle
@@ -11,6 +12,7 @@ import android.os.Environment
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.Formatter
+import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
@@ -42,7 +44,7 @@ class FileListActivity : AppCompatActivity() {
     private lateinit var adapter: FileAdapter
     private lateinit var repository: FileRepository
 
-    // 데이터 로딩 작업 관리 (중복 로딩 방지)
+    // 데이터 로딩 작업 관리
     private var loadJob: Job? = null
 
     // 검색 작업 관리
@@ -71,7 +73,6 @@ class FileListActivity : AppCompatActivity() {
         repository = FileRepository(this)
         prefs = getSharedPreferences("BetterFilesPrefs", Context.MODE_PRIVATE)
 
-        // 1. Intent 데이터 수신
         val intentTitle = intent.getStringExtra("title") ?: "파일"
         currentMode = intent.getStringExtra("mode") ?: "folder"
         val intentPath = intent.getStringExtra("path") ?: Environment.getExternalStorageDirectory().absolutePath
@@ -80,17 +81,14 @@ class FileListActivity : AppCompatActivity() {
         rootPath = intentPath
         currentPath = intentPath
 
-        // 2. 현재 모드에 맞는 정렬 설정 불러오기
         loadSavedSortSettings()
 
         val rvFiles: RecyclerView = findViewById(R.id.rvFiles)
         val btnBack: ImageView = findViewById(R.id.btnBack)
 
-        // 3. 어댑터 설정 (롱클릭 및 선택 이벤트 연결)
         adapter = FileAdapter(
             onClick = { fileItem ->
                 if (fileItem.isDirectory) {
-                    // 검색 모드일 때만 검색 종료 로직 실행 (불필요한 리로드 방지)
                     if (isSearchMode) {
                         closeSearchMode()
                     }
@@ -103,7 +101,6 @@ class FileListActivity : AppCompatActivity() {
                 showFileOptionMenu(view, fileItem)
             },
             onLongClick = { fileItem ->
-                // 복사/이동 중이 아닐 때만 선택 모드 진입
                 if (!FileClipboard.hasClip()) {
                     startSelectionMode(fileItem)
                 }
@@ -119,11 +116,8 @@ class FileListActivity : AppCompatActivity() {
 
         setupHeaderEvents()
         setupSelectionEvents()
-
-        // 붙여넣기 바 이벤트 설정
         setupPasteEvents()
 
-        // 뒤로가기 버튼 처리 (우선순위: 선택모드 > 검색모드 > 일반)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (isSelectionMode) {
@@ -139,7 +133,6 @@ class FileListActivity : AppCompatActivity() {
         loadData(currentMode, rootPath)
     }
 
-    // 파일 클릭 핸들러 (Zip 해제 로직 추가)
     private fun handleFileClick(fileItem: FileItem) {
         val file = File(fileItem.path)
         if (file.extension.equals("zip", ignoreCase = true)) {
@@ -149,25 +142,151 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
+    // 압축 해제 다이얼로그 (아이콘 및 동적 리스트 적용)
     private fun showUnzipDialog(zipFile: File) {
-        AlertDialog.Builder(this)
+        val view = layoutInflater.inflate(R.layout.dialog_zip_preview, null)
+        val tvName: TextView = view.findViewById(R.id.tvZipName)
+        val tvSummary: TextView = view.findViewById(R.id.tvZipSummary)
+        val container: LinearLayout = view.findViewById(R.id.layoutZipContentContainer)
+
+        tvName.text = zipFile.name
+        tvSummary.text = "정보 읽는 중..."
+
+        val dialog = AlertDialog.Builder(this)
             .setTitle("압축 해제")
-            .setMessage("'${zipFile.name}'의 압축을 현재 폴더에 풀까요?")
+            .setView(view)
             .setPositiveButton("해제") { _, _ ->
                 performUnzip(zipFile)
             }
             .setNegativeButton("취소", null)
             .show()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val info = ZipManager.getZipInfo(zipFile)
+
+                withContext(Dispatchers.Main) {
+                    val sizeStr = Formatter.formatFileSize(this@FileListActivity, info.totalSize)
+                    tvSummary.text = "총 ${info.fileCount}개 파일 • 해제 시 약 $sizeStr"
+
+                    container.removeAllViews()
+                    val inflater = LayoutInflater.from(this@FileListActivity)
+
+                    info.fileNames.forEach { fileName ->
+                        val itemView = inflater.inflate(R.layout.item_zip_preview_row, container, false)
+                        val ivIcon: ImageView = itemView.findViewById(R.id.ivZipItemIcon)
+                        val tvItemName: TextView = itemView.findViewById(R.id.tvZipItemName)
+
+                        tvItemName.text = fileName
+
+                        // [수정됨] 아이콘과 색상 적용
+                        val iconRes = getFileIconResource(fileName)
+                        val iconColor = getFileIconColor(fileName)
+
+                        ivIcon.setImageResource(iconRes)
+                        if (iconColor != null) {
+                            ivIcon.setColorFilter(iconColor)
+                        } else {
+                            ivIcon.clearColorFilter()
+                        }
+
+                        container.addView(itemView)
+                    }
+
+                    if (info.fileCount > 10) {
+                        val moreView = TextView(this@FileListActivity)
+                        moreView.text = "...외 ${info.fileCount - 10}개 항목"
+                        moreView.setPadding(8, 16, 8, 8)
+                        moreView.setTextColor(getColor(android.R.color.darker_gray))
+                        container.addView(moreView)
+                    } else if (info.fileCount == 0) {
+                        val emptyView = TextView(this@FileListActivity)
+                        emptyView.text = "내용 없음"
+                        emptyView.setPadding(8, 16, 8, 8)
+                        container.addView(emptyView)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    tvSummary.text = "정보를 읽을 수 없습니다."
+                    val errorView = TextView(this@FileListActivity)
+                    errorView.text = "Error: ${e.message}"
+                    container.addView(errorView)
+                }
+            }
+        }
     }
+
+    // [수정됨] 확장자별 아이콘 리소스 반환 (이미지, APK 전용 아이콘 추가)
+    private fun getFileIconResource(fileName: String): Int {
+        if (fileName.endsWith("/")) return R.drawable.ic_folder_solid
+
+        val lower = fileName.lowercase(Locale.getDefault())
+        return when {
+            isImageFile(lower) -> R.drawable.ic_image_file // [NEW] 이미지 전용 아이콘
+            isApkFile(lower) -> R.drawable.ic_android_file // [NEW] APK 전용 아이콘
+            isVideoFile(lower) -> R.drawable.ic_video
+            isPdfFile(lower) -> R.drawable.ic_pdf
+            isVoiceFile(lower) -> R.drawable.ic_mic
+            isAudioFile(lower) -> R.drawable.ic_music_note
+            isZipFile(lower) -> R.drawable.ic_zip // Zip 안의 Zip
+            else -> R.drawable.ic_file
+        }
+    }
+
+    // [수정됨] 확장자별 아이콘 색상 반환
+    private fun getFileIconColor(fileName: String): Int? {
+        if (fileName.endsWith("/")) return null
+
+        val lower = fileName.lowercase(Locale.getDefault())
+        return when {
+            isImageFile(lower) -> Color.parseColor("#FFA000") // [NEW] 이미지: Amber (주황)
+            isApkFile(lower) -> Color.parseColor("#3DDC84")   // [NEW] APK: Android Green
+            isVideoFile(lower) -> Color.parseColor("#1565C0") // 비디오: Blue
+            isPdfFile(lower) -> Color.parseColor("#F44336")   // PDF: Red
+            isVoiceFile(lower) -> Color.parseColor("#009688") // 음성: Teal
+            isAudioFile(lower) -> Color.parseColor("#9C27B0") // 오디오: Purple
+            isZipFile(lower) -> Color.parseColor("#FFC107")   // Zip: Yellow
+            else -> Color.parseColor("#5F6368")               // 기타: Gray
+        }
+    }
+
+    // --- 확장자 판별 헬퍼 함수들 ---
+    private fun isImageFile(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") ||
+                lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".bmp")
+    }
+
+    private fun isVideoFile(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".avi") ||
+                lower.endsWith(".mov") || lower.endsWith(".wmv") || lower.endsWith(".webm") ||
+                lower.endsWith(".3gp")
+    }
+
+    private fun isApkFile(name: String): Boolean = name.lowercase().endsWith(".apk")
+    private fun isVoiceFile(name: String): Boolean = name.lowercase().endsWith(".m4a")
+    private fun isAudioFile(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".ogg") ||
+                lower.endsWith(".flac") || lower.endsWith(".aac") || lower.endsWith(".wma")
+    }
+    private fun isPdfFile(name: String): Boolean = name.lowercase().endsWith(".pdf")
+    private fun isZipFile(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.endsWith(".zip") || lower.endsWith(".rar") || lower.endsWith(".7z") || lower.endsWith(".tar") || lower.endsWith(".gz")
+    }
+
 
     private fun performUnzip(zipFile: File) {
         val targetDir = File(currentPath)
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // 같은 이름의 폴더 생성 후 그 안에 풀기 (깔끔하게)
                 val folderName = zipFile.nameWithoutExtension
-                val extractDir = getUniqueFile(targetDir, folderName) // 이름 중복 시 (1) 붙임
+                val extractDir = getUniqueFile(targetDir, folderName)
 
                 ZipManager.unzip(zipFile, extractDir)
 
@@ -185,7 +304,7 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // ▼▼▼ 복사/이동/붙여넣기 관련 로직 ▼▼▼
+    // --- (이하 기존 코드 동일) ---
 
     private fun setupPasteEvents() {
         val btnCancelPaste: Button = findViewById(R.id.btnCancelPaste)
@@ -216,7 +335,6 @@ class FileListActivity : AppCompatActivity() {
             val count = FileClipboard.files.size
             val isMove = FileClipboard.isMove
 
-            // 1. 텍스트 설정
             if (isMove) {
                 tvPasteInfo.text = "$count 개 항목 이동 대기 중..."
                 btnPaste.text = "여기로 이동"
@@ -225,7 +343,6 @@ class FileListActivity : AppCompatActivity() {
                 btnPaste.text = "여기에 복사"
             }
 
-            // 2. 같은 폴더 이동 방지 로직
             val sourceParentPath = FileClipboard.files.firstOrNull()?.parent
 
             if (isMove && sourceParentPath == currentPath) {
@@ -254,8 +371,6 @@ class FileListActivity : AppCompatActivity() {
 
             FileClipboard.files.forEach { sourceFile ->
                 if (!sourceFile.exists()) return@forEach
-
-                // 이름 중복 처리
                 val destFile = getUniqueFile(targetDir, sourceFile.name)
 
                 try {
@@ -281,11 +396,8 @@ class FileListActivity : AppCompatActivity() {
                 if (successCount > 0) {
                     val msg = if (FileClipboard.isMove) "이동 완료" else "복사 완료"
                     Toast.makeText(this@FileListActivity, "$successCount 개 $msg", Toast.LENGTH_SHORT).show()
-
                     MediaScannerConnection.scanFile(this@FileListActivity, pathsToScan.toTypedArray(), null, null)
-
                     FileClipboard.clear()
-
                     updatePasteBarUI()
                     loadData(currentMode, currentPath)
                 } else {
@@ -330,14 +442,11 @@ class FileListActivity : AppCompatActivity() {
         Toast.makeText(this, "$action 할 위치로 가서 '$action' 버튼을 누르세요.", Toast.LENGTH_SHORT).show()
     }
 
-    // ▼▼▼ 선택 모드 관련 로직 ▼▼▼
-
     private fun setupSelectionEvents() {
         val btnCloseSelection: ImageView = findViewById(R.id.btnCloseSelection)
         val btnSelectAll: ImageView = findViewById(R.id.btnSelectAll)
         val btnShareSelection: ImageView = findViewById(R.id.btnShareSelection)
         val btnDeleteSelection: ImageView = findViewById(R.id.btnDeleteSelection)
-
         val btnSelectionMore: ImageView = findViewById(R.id.btnSelectionMore)
 
         btnCloseSelection.setOnClickListener { closeSelectionMode() }
@@ -351,7 +460,6 @@ class FileListActivity : AppCompatActivity() {
         btnDeleteSelection.setOnClickListener { showDeleteSelectionDialog() }
     }
 
-    // 선택 모드 더보기 메뉴 (개수에 따라 상세정보 표시 여부 결정)
     private fun showSelectionMoreMenu(view: View) {
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_selection_more, popup.menu)
