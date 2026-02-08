@@ -8,4 +8,9 @@
         android:id="@+id/action_move"
         android:title="이동"
         android:icon="@android:drawable/ic_menu_send" />
+
+    <item
+        android:id="@+id/action_selection_details"
+        android:title="상세 정보"
+        android:icon="@android:drawable/ic_menu_info_details" />
 </menu>

@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.text.Editable
 import android.text.TextWatcher
+import android.text.format.Formatter
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
@@ -32,13 +33,16 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class FileListActivity : AppCompatActivity() {
 
     private lateinit var adapter: FileAdapter
     private lateinit var repository: FileRepository
 
-    // [수정됨] 데이터 로딩 작업 관리 (중복 로딩 방지)
+    // 데이터 로딩 작업 관리 (중복 로딩 방지)
     private var loadJob: Job? = null
 
     // 검색 작업 관리
@@ -86,7 +90,7 @@ class FileListActivity : AppCompatActivity() {
         adapter = FileAdapter(
             onClick = { fileItem ->
                 if (fileItem.isDirectory) {
-                    // [수정됨] 검색 모드일 때만 검색 종료 로직 실행 (불필요한 리로드 방지)
+                    // 검색 모드일 때만 검색 종료 로직 실행 (불필요한 리로드 방지)
                     if (isSearchMode) {
                         closeSearchMode()
                     }
@@ -303,9 +307,18 @@ class FileListActivity : AppCompatActivity() {
         btnDeleteSelection.setOnClickListener { showDeleteSelectionDialog() }
     }
 
+    // [수정됨] 선택 모드 더보기 메뉴 (개수에 따라 상세정보 표시 여부 결정)
     private fun showSelectionMoreMenu(view: View) {
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_selection_more, popup.menu)
+
+        // 선택된 항목 개수 확인
+        val selectedItems = adapter.currentList.filter { it.isSelected }
+
+        // 1개일 때만 '상세 정보' 메뉴 보이기
+        val detailsItem = popup.menu.findItem(R.id.action_selection_details)
+        detailsItem.isVisible = selectedItems.size == 1
+
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.action_copy -> {
@@ -314,6 +327,13 @@ class FileListActivity : AppCompatActivity() {
                 }
                 R.id.action_move -> {
                     copyOrMoveSelected(isMove = true)
+                    true
+                }
+                R.id.action_selection_details -> {
+                    // 선택된 1개의 항목에 대해 상세 정보 표시
+                    if (selectedItems.size == 1) {
+                        showFileDetailsDialog(selectedItems.first())
+                    }
                     true
                 }
                 else -> false
@@ -628,7 +648,7 @@ class FileListActivity : AppCompatActivity() {
 
     // loadData: 경로 표시 및 붙여넣기 바 UI 갱신 호출
     private fun loadData(mode: String, path: String) {
-        // [수정됨] 이전 로딩 작업 취소 (화면 깜빡임 및 데이터 덮어쓰기 방지)
+        // 이전 로딩 작업 취소
         loadJob?.cancel()
 
         currentMode = mode
@@ -669,7 +689,7 @@ class FileListActivity : AppCompatActivity() {
 
         updatePasteBarUI()
 
-        // [수정됨] 새로운 로딩 작업 시작
+        // 새로운 로딩 작업 시작
         loadJob = lifecycleScope.launch {
             val rawFiles = when (mode) {
                 "image" -> repository.getAllImages()
@@ -690,10 +710,51 @@ class FileListActivity : AppCompatActivity() {
                 R.id.action_share -> { shareFile(fileItem); true }
                 R.id.action_rename -> { showRenameDialog(fileItem); true }
                 R.id.action_delete -> { showDeleteDialog(fileItem); true }
+                R.id.action_details -> { showFileDetailsDialog(fileItem); true }
                 else -> false
             }
         }
         popup.show()
+    }
+
+    // [수정됨] 상세 정보 다이얼로그 (권한 정보 제거)
+    private fun showFileDetailsDialog(fileItem: FileItem) {
+        val view = layoutInflater.inflate(R.layout.dialog_file_details, null)
+        val file = File(fileItem.path)
+
+        val tvName: TextView = view.findViewById(R.id.tvDetailName)
+        val tvType: TextView = view.findViewById(R.id.tvDetailType)
+        val tvSize: TextView = view.findViewById(R.id.tvDetailSize)
+        val tvDate: TextView = view.findViewById(R.id.tvDetailDate)
+        val tvPath: TextView = view.findViewById(R.id.tvDetailPath)
+
+        // 권한 TextView 참조 제거됨
+
+        tvName.text = file.name
+        tvPath.text = file.absolutePath
+
+        // 수정 날짜
+        val dateFormat = SimpleDateFormat("yyyy. MM. dd. HH:mm", Locale.getDefault())
+        tvDate.text = dateFormat.format(Date(file.lastModified()))
+
+        // 종류 및 크기
+        if (file.isDirectory) {
+            tvType.text = "폴더"
+            val items = file.list()?.size ?: 0
+            tvSize.text = "$items 항목"
+        } else {
+            val extension = file.extension.uppercase()
+            tvType.text = if (extension.isNotEmpty()) "$extension 파일" else "파일"
+            tvSize.text = Formatter.formatFileSize(this, file.length())
+        }
+
+        // 권한 정보 설정 로직 제거됨
+
+        AlertDialog.Builder(this)
+            .setTitle("상세 정보")
+            .setView(view)
+            .setPositiveButton("확인", null)
+            .show()
     }
 
     private fun showRenameDialog(fileItem: FileItem) {
