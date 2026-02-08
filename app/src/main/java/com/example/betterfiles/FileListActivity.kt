@@ -7,7 +7,11 @@ import android.content.SharedPreferences
 import android.media.MediaScannerConnection
 import android.os.Bundle
 import android.os.Environment
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupMenu
@@ -19,6 +23,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -26,6 +31,12 @@ class FileListActivity : AppCompatActivity() {
 
     private lateinit var adapter: FileAdapter
     private lateinit var repository: FileRepository
+
+    // 검색 작업 관리
+    private var searchJob: Job? = null
+    // 검색 모드 상태 확인 변수
+    private var isSearchMode: Boolean = false
+    private var currentSearchQuery: String = "" // 현재 검색어 저장용
 
     // 네비게이션 변수
     private var currentPath: String = ""
@@ -44,10 +55,9 @@ class FileListActivity : AppCompatActivity() {
 
         repository = FileRepository(this)
 
-        // 설정 불러오기
+        // 1. 초기 설정 불러오기
         prefs = getSharedPreferences("BetterFilesPrefs", Context.MODE_PRIVATE)
-        currentSortMode = prefs.getString("sort_mode", "name") ?: "name"
-        isAscending = prefs.getBoolean("is_ascending", true)
+        loadSavedSortSettings()
 
         // Intent 데이터 수신
         val intentTitle = intent.getStringExtra("title") ?: "파일"
@@ -60,12 +70,11 @@ class FileListActivity : AppCompatActivity() {
 
         val rvFiles: RecyclerView = findViewById(R.id.rvFiles)
         val btnBack: ImageView = findViewById(R.id.btnBack)
-        val btnSort: ImageView = findViewById(R.id.btnSort)
-        val btnNewFolder: ImageView = findViewById(R.id.btnNewFolder) // [추가]
 
         adapter = FileAdapter(
             onClick = { fileItem ->
                 if (fileItem.isDirectory) {
+                    closeSearchMode()
                     loadData("folder", fileItem.path)
                 } else {
                     openFile(fileItem)
@@ -79,68 +88,194 @@ class FileListActivity : AppCompatActivity() {
         rvFiles.adapter = adapter
 
         btnBack.setOnClickListener { handleBackAction() }
-        btnSort.setOnClickListener { view -> showSortMenu(view) }
 
-        // ▼▼▼ [추가] 새 폴더 버튼 클릭 ▼▼▼
-        btnNewFolder.setOnClickListener {
-            showCreateFolderDialog()
-        }
+        setupHeaderEvents()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() { handleBackAction() }
+            override fun handleOnBackPressed() {
+                if (isSearchMode) {
+                    closeSearchMode()
+                } else {
+                    handleBackAction()
+                }
+            }
         })
 
         loadData(currentMode, rootPath)
     }
 
-    // ▼▼▼ [추가] 새 폴더 생성 다이얼로그 ▼▼▼
-    private fun showCreateFolderDialog() {
-        val editText = android.widget.EditText(this)
-        editText.hint = "새 폴더 이름"
-        editText.setSingleLine()
-
-        val container = android.widget.FrameLayout(this)
-        val params = android.widget.FrameLayout.LayoutParams(
-            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        params.leftMargin = 50
-        params.rightMargin = 50
-        editText.layoutParams = params
-        container.addView(editText)
-
-        AlertDialog.Builder(this)
-            .setTitle("새 폴더 만들기")
-            .setView(container)
-            .setPositiveButton("생성") { _, _ ->
-                val folderName = editText.text.toString().trim()
-                if (folderName.isNotEmpty()) {
-                    createFolder(folderName)
-                }
-            }
-            .setNegativeButton("취소", null)
-            .show()
+    private fun loadSavedSortSettings() {
+        currentSortMode = prefs.getString("sort_mode", "name") ?: "name"
+        isAscending = prefs.getBoolean("is_ascending", true)
     }
 
-    // ▼▼▼ [추가] 실제 폴더 생성 로직 ▼▼▼
-    private fun createFolder(name: String) {
-        val newFolder = File(currentPath, name)
+    private fun setupHeaderEvents() {
+        val btnSort: ImageView = findViewById(R.id.btnSort)
+        val btnNewFolder: ImageView = findViewById(R.id.btnNewFolder)
+        val btnSearch: ImageView = findViewById(R.id.btnSearch)
+        val btnCloseSearch: ImageView = findViewById(R.id.btnCloseSearch)
+        val etSearch: EditText = findViewById(R.id.etSearch)
+        val headerNormal: LinearLayout = findViewById(R.id.headerNormal)
+        val headerSearch: LinearLayout = findViewById(R.id.headerSearch)
 
-        if (newFolder.exists()) {
-            Toast.makeText(this, "이미 존재하는 폴더입니다.", Toast.LENGTH_SHORT).show()
+        // 검색바 안의 정렬 버튼
+        val btnSearchSort: ImageView = findViewById(R.id.btnSearchSort)
+        btnSearchSort.setOnClickListener { view -> showSortMenu(view) }
+
+        btnSort.setOnClickListener { view -> showSortMenu(view) }
+        btnNewFolder.setOnClickListener { showCreateFolderDialog() }
+
+        // 검색 버튼 클릭
+        btnSearch.setOnClickListener {
+            isSearchMode = true
+
+            // 검색 진입 시: 정렬을 "이름 오름차순"으로 강제 초기화 (임시)
+            currentSortMode = "name"
+            isAscending = true
+
+            headerNormal.visibility = View.GONE
+            headerSearch.visibility = View.VISIBLE
+            etSearch.setText("")
+            etSearch.requestFocus()
+
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(etSearch, InputMethodManager.SHOW_IMPLICIT)
+        }
+
+        // 닫기 버튼 클릭
+        btnCloseSearch.setOnClickListener {
+            closeSearchMode()
+        }
+
+        etSearch.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                currentSearchQuery = s.toString()
+                performSearch(currentSearchQuery)
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+    }
+
+    private fun performSearch(query: String) {
+        searchJob?.cancel()
+
+        if (query.isEmpty()) {
+            lifecycleScope.launch {
+                val rawFiles = repository.getFilesByPath(currentPath)
+                applySortAndSubmit(rawFiles, isSearchResult = true)
+            }
             return
         }
 
-        if (newFolder.mkdirs()) { // mkdirs(): 폴더 생성
-            Toast.makeText(this, "폴더가 생성되었습니다.", Toast.LENGTH_SHORT).show()
+        searchJob = lifecycleScope.launch {
+            val results = repository.searchRecursive(currentPath, query)
+            applySortAndSubmit(results, isSearchResult = true)
+        }
+    }
 
-            // 미디어 스캔 (시스템에 알림)
-            MediaScannerConnection.scanFile(this, arrayOf(newFolder.absolutePath), null, null)
+    private fun closeSearchMode() {
+        isSearchMode = false
+        loadSavedSortSettings() // 설정 복구
 
-            // 목록 새로고침
-            loadData(currentMode, currentPath)
+        val headerNormal: LinearLayout = findViewById(R.id.headerNormal)
+        val headerSearch: LinearLayout = findViewById(R.id.headerSearch)
+        val etSearch: EditText = findViewById(R.id.etSearch)
+
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(etSearch.windowToken, 0)
+
+        etSearch.setText("")
+        headerSearch.visibility = View.GONE
+        headerNormal.visibility = View.VISIBLE
+
+        loadData(currentMode, currentPath)
+    }
+
+    private fun showSortMenu(view: View) {
+        val popup = PopupMenu(this, view)
+        popup.menuInflater.inflate(R.menu.menu_sort, popup.menu)
+
+        when (currentSortMode) {
+            "name" -> popup.menu.findItem(R.id.sort_name).isChecked = true
+            "size" -> popup.menu.findItem(R.id.sort_size).isChecked = true
+            else -> popup.menu.findItem(R.id.sort_date).isChecked = true
+        }
+        if (isAscending) popup.menu.findItem(R.id.order_asc).isChecked = true
+        else popup.menu.findItem(R.id.order_desc).isChecked = true
+
+        popup.setOnMenuItemClickListener { menuItem ->
+            menuItem.isChecked = true
+            when (menuItem.itemId) {
+                R.id.sort_date -> currentSortMode = "date"
+                R.id.sort_name -> currentSortMode = "name"
+                R.id.sort_size -> currentSortMode = "size"
+                R.id.order_asc -> isAscending = true
+                R.id.order_desc -> isAscending = false
+                else -> return@setOnMenuItemClickListener false
+            }
+
+            if (!isSearchMode) {
+                val editor = prefs.edit()
+                editor.putString("sort_mode", currentSortMode)
+                editor.putBoolean("is_ascending", isAscending)
+                editor.apply()
+                loadData(currentMode, currentPath)
+            } else {
+                performSearch(currentSearchQuery)
+            }
+            true
+        }
+        popup.show()
+    }
+
+    // ▼▼▼ [수정됨] 검색 결과 여부에 따라 빈 화면 문구 변경 ▼▼▼
+    private fun applySortAndSubmit(files: List<FileItem>, isSearchResult: Boolean = false) {
+        val sortedFiles = files.sortedWith(Comparator { o1, o2 ->
+            if (o1.isDirectory != o2.isDirectory) {
+                return@Comparator if (o1.isDirectory) -1 else 1
+            }
+            val result = when (currentSortMode) {
+                "name" -> o1.name.lowercase().compareTo(o2.name.lowercase())
+                "size" -> o1.size.compareTo(o2.size)
+                else -> o1.dateModified.compareTo(o2.dateModified)
+            }
+            if (isAscending) result else -result
+        })
+
+        val rvFiles = findViewById<RecyclerView>(R.id.rvFiles)
+        val layoutEmpty = findViewById<LinearLayout>(R.id.layoutEmpty)
+        val tvFileCount = findViewById<TextView>(R.id.tvFileCount)
+
+        // 빈 화면 구성 요소들
+        val tvEmptyTitle = findViewById<TextView>(R.id.tvEmptyTitle)
+        val tvEmptyMessage = findViewById<TextView>(R.id.tvEmptyMessage)
+        val ivEmptyIcon = findViewById<ImageView>(R.id.ivEmptyIcon)
+
+        if (sortedFiles.isEmpty()) {
+            rvFiles.visibility = View.GONE
+            layoutEmpty.visibility = View.VISIBLE
+
+            // ★ 검색 결과가 없는 경우와 폴더가 빈 경우를 구분
+            if (isSearchResult) {
+                tvEmptyTitle.text = "검색 결과가 없어요"
+                tvEmptyMessage.text = "다른 검색어로 시도해 보세요."
+                ivEmptyIcon.setImageResource(R.drawable.ic_search) // 돋보기 아이콘
+            } else {
+                tvEmptyTitle.text = "폴더가 비어있어요"
+                tvEmptyMessage.text = "파일이 없습니다."
+                ivEmptyIcon.setImageResource(R.drawable.ic_folder_solid) // 폴더 아이콘
+            }
         } else {
-            Toast.makeText(this, "폴더 생성 실패.", Toast.LENGTH_SHORT).show()
+            rvFiles.visibility = View.VISIBLE
+            layoutEmpty.visibility = View.GONE
+            adapter.submitList(sortedFiles)
+        }
+
+        if (isSearchResult) {
+            tvFileCount.text = "${sortedFiles.size}개 검색됨"
+        } else {
+            tvFileCount.text = "${sortedFiles.size}개 파일"
         }
     }
 
@@ -148,15 +283,13 @@ class FileListActivity : AppCompatActivity() {
         currentMode = mode
         currentPath = path
         val tvTitle = findViewById<TextView>(R.id.tvPageTitle)
-        val btnNewFolder = findViewById<ImageView>(R.id.btnNewFolder) // [추가] 버튼 제어용
+        val btnNewFolder = findViewById<ImageView>(R.id.btnNewFolder)
 
         if (mode == "folder") {
             if (path == rootPath) tvTitle.text = rootTitle else tvTitle.text = File(path).name
-            // ▼▼▼ [추가] 폴더 모드일 때만 새 폴더 버튼 보이기 ▼▼▼
             btnNewFolder.visibility = View.VISIBLE
         } else {
             tvTitle.text = rootTitle
-            // ▼▼▼ [추가] 카테고리 모드에선 숨기기 ▼▼▼
             btnNewFolder.visibility = View.GONE
         }
 
@@ -168,63 +301,11 @@ class FileListActivity : AppCompatActivity() {
                 "download" -> repository.getDownloads()
                 else -> repository.getFilesByPath(path)
             }
-
-            val sortedFiles = rawFiles.sortedWith(Comparator { o1, o2 ->
-                if (o1.isDirectory != o2.isDirectory) return@Comparator if (o1.isDirectory) -1 else 1
-                val result = when (currentSortMode) {
-                    "name" -> o1.name.lowercase().compareTo(o2.name.lowercase())
-                    "size" -> o1.size.compareTo(o2.size)
-                    else -> o1.dateModified.compareTo(o2.dateModified)
-                }
-                if (isAscending) result else -result
-            })
-
-            val rvFiles = findViewById<RecyclerView>(R.id.rvFiles)
-            val layoutEmpty = findViewById<LinearLayout>(R.id.layoutEmpty)
-            val tvFileCount = findViewById<TextView>(R.id.tvFileCount)
-
-            if (sortedFiles.isEmpty()) {
-                rvFiles.visibility = View.GONE
-                layoutEmpty.visibility = View.VISIBLE
-            } else {
-                rvFiles.visibility = View.VISIBLE
-                layoutEmpty.visibility = View.GONE
-                adapter.submitList(sortedFiles)
-            }
-            tvFileCount.text = "${sortedFiles.size}개 파일"
+            applySortAndSubmit(rawFiles, isSearchResult = false)
         }
     }
 
-    // --- (이하 기존 코드 동일) ---
-    private fun showSortMenu(view: View) {
-        val popup = PopupMenu(this, view)
-        popup.menuInflater.inflate(R.menu.menu_sort, popup.menu)
-        when (currentSortMode) {
-            "name" -> popup.menu.findItem(R.id.sort_name).isChecked = true
-            "size" -> popup.menu.findItem(R.id.sort_size).isChecked = true
-            else -> popup.menu.findItem(R.id.sort_date).isChecked = true
-        }
-        if (isAscending) popup.menu.findItem(R.id.order_asc).isChecked = true
-        else popup.menu.findItem(R.id.order_desc).isChecked = true
-
-        popup.setOnMenuItemClickListener { menuItem ->
-            val editor = prefs.edit()
-            menuItem.isChecked = true
-            when (menuItem.itemId) {
-                R.id.sort_date -> { currentSortMode = "date"; editor.putString("sort_mode", "date") }
-                R.id.sort_name -> { currentSortMode = "name"; editor.putString("sort_mode", "name") }
-                R.id.sort_size -> { currentSortMode = "size"; editor.putString("sort_mode", "size") }
-                R.id.order_asc -> { isAscending = true; editor.putBoolean("is_ascending", true) }
-                R.id.order_desc -> { isAscending = false; editor.putBoolean("is_ascending", false) }
-                else -> return@setOnMenuItemClickListener false
-            }
-            editor.apply()
-            loadData(currentMode, currentPath)
-            true
-        }
-        popup.show()
-    }
-
+    // --- (이하 나머지 팝업 메뉴, 파일 조작 함수들은 기존과 동일) ---
     private fun showFileOptionMenu(view: View, fileItem: FileItem) {
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_file_item, popup.menu)
@@ -337,6 +418,46 @@ class FileListActivity : AppCompatActivity() {
             startActivity(intent)
         } catch (e: Exception) {
             Toast.makeText(this, "이 파일을 열 수 있는 앱이 없습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showCreateFolderDialog() {
+        val editText = android.widget.EditText(this)
+        editText.hint = "새 폴더 이름"
+        editText.setSingleLine()
+
+        val container = android.widget.FrameLayout(this)
+        val params = android.widget.FrameLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        params.leftMargin = 50; params.rightMargin = 50
+        editText.layoutParams = params
+        container.addView(editText)
+
+        AlertDialog.Builder(this)
+            .setTitle("새 폴더 만들기")
+            .setView(container)
+            .setPositiveButton("생성") { _, _ ->
+                val folderName = editText.text.toString().trim()
+                if (folderName.isNotEmpty()) createFolder(folderName)
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    private fun createFolder(name: String) {
+        val newFolder = File(currentPath, name)
+        if (newFolder.exists()) {
+            Toast.makeText(this, "이미 존재하는 폴더입니다.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (newFolder.mkdirs()) {
+            Toast.makeText(this, "폴더가 생성되었습니다.", Toast.LENGTH_SHORT).show()
+            MediaScannerConnection.scanFile(this, arrayOf(newFolder.absolutePath), null, null)
+            loadData(currentMode, currentPath)
+        } else {
+            Toast.makeText(this, "폴더 생성 실패.", Toast.LENGTH_SHORT).show()
         }
     }
 }

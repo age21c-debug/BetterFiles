@@ -3,12 +3,13 @@ package com.example.betterfiles
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import android.provider.MediaStore
-import android.webkit.MimeTypeMap // ★ 추가됨: 확장자 사전
+import android.webkit.MimeTypeMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.Locale // ★ 추가됨: 소문자 변환용
+import java.util.Locale
 
 class FileRepository(private val context: Context) {
 
@@ -43,7 +44,6 @@ class FileRepository(private val context: Context) {
     }
 
     // 5. 실제 경로(Path)를 기반으로 파일 목록 가져오기 (폴더 탐색용)
-    // ★ 여기가 수정되었습니다!
     suspend fun getFilesByPath(path: String): List<FileItem> = withContext(Dispatchers.IO) {
         val root = File(path)
         val fileList = mutableListOf<FileItem>()
@@ -55,33 +55,64 @@ class FileRepository(private val context: Context) {
 
             for (file in sortedList) {
                 if (file.name.startsWith(".")) continue // 숨김 파일 제외
-
-                // ▼▼▼ [핵심 변경] 파일 확장자로 MIME Type 알아내기 ▼▼▼
-                val mimeType = if (file.isDirectory) {
-                    "resource/folder"
-                } else {
-                    // 파일의 확장자만 뽑아냄 (예: jpg)
-                    val extension = file.extension.lowercase(Locale.ROOT)
-                    // 안드로이드 사전을 뒤져서 MIME Type을 찾음 (예: image/jpeg)
-                    MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
-                }
-                // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
-                fileList.add(
-                    FileItem(
-                        id = file.hashCode().toLong(),
-                        name = file.name,
-                        path = file.absolutePath,
-                        size = if (file.isDirectory) 0 else file.length(),
-                        dateModified = file.lastModified() / 1000,
-                        mimeType = mimeType, // 찾아낸 진짜 타입 적용
-                        isDirectory = file.isDirectory,
-                        contentUri = null
-                    )
-                )
+                fileList.add(fileToFileItem(file)) // 공통 변환 함수 사용
             }
         }
         return@withContext fileList
+    }
+
+    // ▼▼▼ [추가] 하위 폴더까지 뒤지는 재귀 검색 기능 ▼▼▼
+    suspend fun searchRecursive(path: String, query: String): List<FileItem> = withContext(Dispatchers.IO) {
+        val resultList = mutableListOf<FileItem>()
+        val rootDir = File(path)
+
+        if (!rootDir.exists() || !rootDir.isDirectory) return@withContext emptyList()
+
+        // 재귀 탐색 함수
+        fun traverse(dir: File) {
+            val list = dir.listFiles() ?: return
+
+            for (file in list) {
+                if (file.name.startsWith(".")) continue // 숨김 파일 건너뛰기
+                if (Thread.currentThread().isInterrupted) return // 작업 취소 시 중단
+
+                // 검색어 포함 여부 확인 (대소문자 무시)
+                if (file.name.contains(query, ignoreCase = true)) {
+                    resultList.add(fileToFileItem(file))
+                }
+
+                // 폴더면 더 깊이 들어감 (재귀)
+                if (file.isDirectory) {
+                    traverse(file)
+                }
+            }
+        }
+
+        traverse(rootDir)
+        // 결과 정렬 (폴더 우선)
+        resultList.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+    }
+    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+    // --- [공통] File 객체를 FileItem으로 변환하는 함수 (중복 제거) ---
+    private fun fileToFileItem(file: File): FileItem {
+        val mimeType = if (file.isDirectory) {
+            "resource/folder"
+        } else {
+            val extension = file.extension.lowercase(Locale.ROOT)
+            MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
+        }
+
+        return FileItem(
+            id = file.hashCode().toLong(),
+            name = file.name,
+            path = file.absolutePath,
+            size = if (file.isDirectory) 0 else file.length(),
+            dateModified = file.lastModified() / 1000,
+            mimeType = mimeType,
+            isDirectory = file.isDirectory,
+            contentUri = Uri.fromFile(file)
+        )
     }
 
     // --- 공통 쿼리 로직 ---
