@@ -118,7 +118,6 @@ class FileListActivity : AppCompatActivity() {
         val headerNormal: LinearLayout = findViewById(R.id.headerNormal)
         val headerSearch: LinearLayout = findViewById(R.id.headerSearch)
 
-        // 검색바 안의 정렬 버튼
         val btnSearchSort: ImageView = findViewById(R.id.btnSearchSort)
         btnSearchSort.setOnClickListener { view -> showSortMenu(view) }
 
@@ -157,19 +156,40 @@ class FileListActivity : AppCompatActivity() {
         })
     }
 
+    // ▼▼▼ [수정] 모드별 검색 로직 분기 처리 ▼▼▼
     private fun performSearch(query: String) {
         searchJob?.cancel()
 
         if (query.isEmpty()) {
             lifecycleScope.launch {
-                val rawFiles = repository.getFilesByPath(currentPath)
+                // 검색어 없을 때: 모드에 맞는 전체 목록 로드
+                val rawFiles = when (currentMode) {
+                    "image" -> repository.getAllImages()
+                    "video" -> repository.getAllVideos()
+                    "audio" -> repository.getAllAudio()
+                    "download" -> repository.getDownloads()
+                    else -> repository.getFilesByPath(currentPath)
+                }
                 applySortAndSubmit(rawFiles, isSearchResult = true)
             }
             return
         }
 
         searchJob = lifecycleScope.launch {
-            val results = repository.searchRecursive(currentPath, query)
+            // ▼ 모드에 따라 검색 방식 결정
+            val results = when (currentMode) {
+                "image" -> repository.getAllImages(query) // DB 검색
+                "video" -> repository.getAllVideos(query) // DB 검색
+                "audio" -> repository.getAllAudio(query) // DB 검색
+                "download" -> {
+                    // 다운로드 폴더는 '재귀 검색'으로 처리 (전략대로)
+                    val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+                    repository.searchRecursive(downloadPath, query)
+                }
+                "folder" -> repository.searchRecursive(currentPath, query) // 기존 재귀 검색
+                else -> repository.searchRecursive(currentPath, query)
+            }
+
             applySortAndSubmit(results, isSearchResult = true)
         }
     }
@@ -229,7 +249,6 @@ class FileListActivity : AppCompatActivity() {
         popup.show()
     }
 
-    // ▼▼▼ [수정됨] 검색 결과 여부에 따라 빈 화면 문구 변경 ▼▼▼
     private fun applySortAndSubmit(files: List<FileItem>, isSearchResult: Boolean = false) {
         val sortedFiles = files.sortedWith(Comparator { o1, o2 ->
             if (o1.isDirectory != o2.isDirectory) {
@@ -247,7 +266,6 @@ class FileListActivity : AppCompatActivity() {
         val layoutEmpty = findViewById<LinearLayout>(R.id.layoutEmpty)
         val tvFileCount = findViewById<TextView>(R.id.tvFileCount)
 
-        // 빈 화면 구성 요소들
         val tvEmptyTitle = findViewById<TextView>(R.id.tvEmptyTitle)
         val tvEmptyMessage = findViewById<TextView>(R.id.tvEmptyMessage)
         val ivEmptyIcon = findViewById<ImageView>(R.id.ivEmptyIcon)
@@ -256,15 +274,14 @@ class FileListActivity : AppCompatActivity() {
             rvFiles.visibility = View.GONE
             layoutEmpty.visibility = View.VISIBLE
 
-            // ★ 검색 결과가 없는 경우와 폴더가 빈 경우를 구분
             if (isSearchResult) {
                 tvEmptyTitle.text = "검색 결과가 없어요"
                 tvEmptyMessage.text = "다른 검색어로 시도해 보세요."
-                ivEmptyIcon.setImageResource(R.drawable.ic_search) // 돋보기 아이콘
+                ivEmptyIcon.setImageResource(R.drawable.ic_search)
             } else {
                 tvEmptyTitle.text = "폴더가 비어있어요"
                 tvEmptyMessage.text = "파일이 없습니다."
-                ivEmptyIcon.setImageResource(R.drawable.ic_folder_solid) // 폴더 아이콘
+                ivEmptyIcon.setImageResource(R.drawable.ic_folder_solid)
             }
         } else {
             rvFiles.visibility = View.VISIBLE

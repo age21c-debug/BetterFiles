@@ -13,28 +13,43 @@ import java.util.Locale
 
 class FileRepository(private val context: Context) {
 
-    // 1. 이미지 파일 가져오기 (전체)
-    suspend fun getAllImages(): List<FileItem> = withContext(Dispatchers.IO) {
+    // ▼▼▼ [수정] 검색어(query) 파라미터 추가 (기본값 null) ▼▼▼
+    // 1. 이미지 파일 가져오기 (전체 or 검색)
+    suspend fun getAllImages(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
         val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         val sortOrder = "${MediaStore.Images.Media.DATE_MODIFIED} DESC"
-        queryMediaStore(collection, null, null, sortOrder)
+
+        // 검색어가 있으면 이름(DISPLAY_NAME)으로 필터링
+        val selection = if (query != null) "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?" else null
+        val selectionArgs = if (query != null) arrayOf("%$query%") else null
+
+        queryMediaStore(collection, selection, selectionArgs, sortOrder)
     }
 
-    // 2. 비디오 파일 가져오기 (전체)
-    suspend fun getAllVideos(): List<FileItem> = withContext(Dispatchers.IO) {
+    // 2. 비디오 파일 가져오기 (전체 or 검색)
+    suspend fun getAllVideos(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
         val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
         val sortOrder = "${MediaStore.Video.Media.DATE_MODIFIED} DESC"
-        queryMediaStore(collection, null, null, sortOrder)
+
+        val selection = if (query != null) "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?" else null
+        val selectionArgs = if (query != null) arrayOf("%$query%") else null
+
+        queryMediaStore(collection, selection, selectionArgs, sortOrder)
     }
 
-    // 3. 오디오 파일 가져오기 (전체)
-    suspend fun getAllAudio(): List<FileItem> = withContext(Dispatchers.IO) {
+    // 3. 오디오 파일 가져오기 (전체 or 검색)
+    suspend fun getAllAudio(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
         val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
-        queryMediaStore(collection, null, null, sortOrder)
+
+        val selection = if (query != null) "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?" else null
+        val selectionArgs = if (query != null) arrayOf("%$query%") else null
+
+        queryMediaStore(collection, selection, selectionArgs, sortOrder)
     }
 
-    // 4. 다운로드 폴더 파일 가져오기
+    // 4. 다운로드 폴더 파일 가져오기 (목록 로딩용)
+    // * 검색 시에는 searchRecursive를 직접 사용할 것이므로 여기는 그대로 둡니다.
     suspend fun getDownloads(): List<FileItem> = withContext(Dispatchers.IO) {
         val collection = MediaStore.Files.getContentUri("external")
         val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ?"
@@ -50,38 +65,34 @@ class FileRepository(private val context: Context) {
 
         if (root.exists() && root.isDirectory) {
             val list = root.listFiles() ?: emptyArray()
-            // 정렬: 폴더 먼저, 그 다음 파일 (이름 오름차순)
             val sortedList = list.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
 
             for (file in sortedList) {
-                if (file.name.startsWith(".")) continue // 숨김 파일 제외
-                fileList.add(fileToFileItem(file)) // 공통 변환 함수 사용
+                if (file.name.startsWith(".")) continue
+                fileList.add(fileToFileItem(file))
             }
         }
         return@withContext fileList
     }
 
-    // ▼▼▼ [추가] 하위 폴더까지 뒤지는 재귀 검색 기능 ▼▼▼
+    // 6. 하위 폴더까지 뒤지는 재귀 검색 기능
     suspend fun searchRecursive(path: String, query: String): List<FileItem> = withContext(Dispatchers.IO) {
         val resultList = mutableListOf<FileItem>()
         val rootDir = File(path)
 
         if (!rootDir.exists() || !rootDir.isDirectory) return@withContext emptyList()
 
-        // 재귀 탐색 함수
         fun traverse(dir: File) {
             val list = dir.listFiles() ?: return
 
             for (file in list) {
-                if (file.name.startsWith(".")) continue // 숨김 파일 건너뛰기
-                if (Thread.currentThread().isInterrupted) return // 작업 취소 시 중단
+                if (file.name.startsWith(".")) continue
+                if (Thread.currentThread().isInterrupted) return
 
-                // 검색어 포함 여부 확인 (대소문자 무시)
                 if (file.name.contains(query, ignoreCase = true)) {
                     resultList.add(fileToFileItem(file))
                 }
 
-                // 폴더면 더 깊이 들어감 (재귀)
                 if (file.isDirectory) {
                     traverse(file)
                 }
@@ -89,12 +100,10 @@ class FileRepository(private val context: Context) {
         }
 
         traverse(rootDir)
-        // 결과 정렬 (폴더 우선)
         resultList.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
     }
-    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-    // --- [공통] File 객체를 FileItem으로 변환하는 함수 (중복 제거) ---
+    // --- [공통] File 객체를 FileItem으로 변환 ---
     private fun fileToFileItem(file: File): FileItem {
         val mimeType = if (file.isDirectory) {
             "resource/folder"
