@@ -123,16 +123,16 @@ class FileListActivity : AppCompatActivity() {
         loadData(currentMode, rootPath)
     }
 
-    // ▼▼▼ 선택 모드 관련 로직 ▼▼▼
+    // ▼▼▼ 선택 모드 관련 로직 (전체 선택 포함) ▼▼▼
 
     private fun setupSelectionEvents() {
         val btnCloseSelection: ImageView = findViewById(R.id.btnCloseSelection)
-        val btnSelectAll: ImageView = findViewById(R.id.btnSelectAll)
+        val btnSelectAll: ImageView = findViewById(R.id.btnSelectAll) // 전체선택 버튼
         val btnShareSelection: ImageView = findViewById(R.id.btnShareSelection)
         val btnDeleteSelection: ImageView = findViewById(R.id.btnDeleteSelection)
 
         btnCloseSelection.setOnClickListener { closeSelectionMode() }
-        btnSelectAll.setOnClickListener { toggleSelectAll() }
+        btnSelectAll.setOnClickListener { toggleSelectAll() } // 리스너 연결
         btnShareSelection.setOnClickListener { shareSelectedFiles() }
         btnDeleteSelection.setOnClickListener { showDeleteSelectionDialog() }
     }
@@ -244,7 +244,6 @@ class FileListActivity : AppCompatActivity() {
             uris.add(uri)
         }
 
-        // MIME 타입 결정 (모두 이미지면 image/*, 아니면 */*)
         val mimeType = if (selectedItems.all { it.mimeType.startsWith("image/") }) "image/*"
         else if (selectedItems.all { it.mimeType.startsWith("video/") }) "video/*"
         else "*/*"
@@ -260,8 +259,8 @@ class FileListActivity : AppCompatActivity() {
             Toast.makeText(this, "공유할 수 없습니다.", Toast.LENGTH_SHORT).show()
         }
     }
-    // ▲▲▲ 선택 모드 관련 로직 끝 ▲▲▲
 
+    // --- 정렬, 검색, 데이터 로드 ---
     private fun loadSavedSortSettings() {
         val sortKey = "sort_mode_$currentMode"
         val ascKey = "is_ascending_$currentMode"
@@ -446,14 +445,23 @@ class FileListActivity : AppCompatActivity() {
             adapter.submitList(sortedFiles)
         }
 
+        // ▼▼▼ [수정됨] 모드에 따라 텍스트 표시 분기 ▼▼▼
         if (isSearchResult) {
             tvFileCount.text = "${sortedFiles.size}개 검색됨"
         } else {
-            tvFileCount.text = "${sortedFiles.size}개 파일"
+            if (currentMode == "folder") {
+                // 내장 메모리(폴더) 모드일 때만 폴더/파일 개수 구분
+                val folderCount = sortedFiles.count { it.isDirectory }
+                val fileCount = sortedFiles.count { !it.isDirectory }
+                tvFileCount.text = "${folderCount}개 폴더 • ${fileCount}개 파일"
+            } else {
+                // 카테고리 모드(이미지 등)는 폴더 없이 파일만 있으므로 전체 개수만 표시
+                tvFileCount.text = "${sortedFiles.size}개 파일"
+            }
         }
     }
 
-    // ▼▼▼ [수정됨] loadData: 경로 표시 로직 추가됨 ▼▼▼
+    // loadData: 경로 표시 로직 포함
     private fun loadData(mode: String, path: String) {
         currentMode = mode
         currentPath = path
@@ -461,39 +469,32 @@ class FileListActivity : AppCompatActivity() {
         val tvTitle = findViewById<TextView>(R.id.tvPageTitle)
         val btnNewFolder = findViewById<ImageView>(R.id.btnNewFolder)
 
-        // 경로 표시 뷰 바인딩 (XML에 추가된 뷰들)
+        // 경로 표시 뷰 바인딩
         val scrollViewPath = findViewById<HorizontalScrollView>(R.id.scrollViewPath)
         val tvPathIndicator = findViewById<TextView>(R.id.tvPathIndicator)
 
         if (mode == "folder") {
             btnNewFolder.visibility = View.VISIBLE
 
-            // 1. 루트 경로인지 확인
             if (path == rootPath) {
-                // 루트면 제목만 보여주고 경로는 숨김
                 tvTitle.text = rootTitle
                 if (scrollViewPath != null) scrollViewPath.visibility = View.GONE
             } else {
-                // 하위 폴더면 제목은 '현재폴더명', 위쪽 경로 표시줄 활성화
                 tvTitle.text = File(path).name
 
                 if (scrollViewPath != null && tvPathIndicator != null) {
                     scrollViewPath.visibility = View.VISIBLE
 
-                    // 2. 경로 문자열 생성 (예: 내장 메모리 > DCIM > Camera)
                     val relativePath = path.removePrefix(rootPath)
-                    // 슬래시(/)를 화살표( > )로 변경하여 표시
-                    val displayPath = "$rootTitle${relativePath.replace("/", " > ")}"
+                    val displayPath = "내장 메모리" + relativePath.replace("/", " > ")
                     tvPathIndicator.text = displayPath
 
-                    // 3. 스크롤을 맨 오른쪽(현재 위치)으로 이동
                     scrollViewPath.post {
                         scrollViewPath.fullScroll(View.FOCUS_RIGHT)
                     }
                 }
             }
         } else {
-            // 카테고리 모드 (이미지, 비디오 등)에서는 경로 표시 안 함
             tvTitle.text = rootTitle
             btnNewFolder.visibility = View.GONE
             if (scrollViewPath != null) scrollViewPath.visibility = View.GONE
