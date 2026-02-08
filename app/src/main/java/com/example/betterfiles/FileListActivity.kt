@@ -142,7 +142,7 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // 압축 해제 다이얼로그 (아이콘 및 동적 리스트 적용)
+    // 압축 해제 다이얼로그
     private fun showUnzipDialog(zipFile: File) {
         val view = layoutInflater.inflate(R.layout.dialog_zip_preview, null)
         val tvName: TextView = view.findViewById(R.id.tvZipName)
@@ -179,7 +179,6 @@ class FileListActivity : AppCompatActivity() {
 
                         tvItemName.text = fileName
 
-                        // [수정됨] 아이콘과 색상 적용
                         val iconRes = getFileIconResource(fileName)
                         val iconColor = getFileIconColor(fileName)
 
@@ -218,41 +217,38 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // [수정됨] 확장자별 아이콘 리소스 반환 (이미지, APK 전용 아이콘 추가)
     private fun getFileIconResource(fileName: String): Int {
         if (fileName.endsWith("/")) return R.drawable.ic_folder_solid
 
         val lower = fileName.lowercase(Locale.getDefault())
         return when {
-            isImageFile(lower) -> R.drawable.ic_image_file // [NEW] 이미지 전용 아이콘
-            isApkFile(lower) -> R.drawable.ic_android_file // [NEW] APK 전용 아이콘
+            isImageFile(lower) -> R.drawable.ic_image_file
+            isApkFile(lower) -> R.drawable.ic_android_file
             isVideoFile(lower) -> R.drawable.ic_video
             isPdfFile(lower) -> R.drawable.ic_pdf
             isVoiceFile(lower) -> R.drawable.ic_mic
             isAudioFile(lower) -> R.drawable.ic_music_note
-            isZipFile(lower) -> R.drawable.ic_zip // Zip 안의 Zip
+            isZipFile(lower) -> R.drawable.ic_zip
             else -> R.drawable.ic_file
         }
     }
 
-    // [수정됨] 확장자별 아이콘 색상 반환
     private fun getFileIconColor(fileName: String): Int? {
         if (fileName.endsWith("/")) return null
 
         val lower = fileName.lowercase(Locale.getDefault())
         return when {
-            isImageFile(lower) -> Color.parseColor("#FFA000") // [NEW] 이미지: Amber (주황)
-            isApkFile(lower) -> Color.parseColor("#3DDC84")   // [NEW] APK: Android Green
-            isVideoFile(lower) -> Color.parseColor("#1565C0") // 비디오: Blue
-            isPdfFile(lower) -> Color.parseColor("#F44336")   // PDF: Red
-            isVoiceFile(lower) -> Color.parseColor("#009688") // 음성: Teal
-            isAudioFile(lower) -> Color.parseColor("#9C27B0") // 오디오: Purple
-            isZipFile(lower) -> Color.parseColor("#FFC107")   // Zip: Yellow
-            else -> Color.parseColor("#5F6368")               // 기타: Gray
+            isImageFile(lower) -> Color.parseColor("#FFA000")
+            isApkFile(lower) -> Color.parseColor("#3DDC84")
+            isVideoFile(lower) -> Color.parseColor("#1565C0")
+            isPdfFile(lower) -> Color.parseColor("#F44336")
+            isVoiceFile(lower) -> Color.parseColor("#009688")
+            isAudioFile(lower) -> Color.parseColor("#9C27B0")
+            isZipFile(lower) -> Color.parseColor("#FFC107")
+            else -> Color.parseColor("#5F6368")
         }
     }
 
-    // --- 확장자 판별 헬퍼 함수들 ---
     private fun isImageFile(name: String): Boolean {
         val lower = name.lowercase()
         return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") ||
@@ -853,7 +849,17 @@ class FileListActivity : AppCompatActivity() {
             if (currentMode == "folder") {
                 val folderCount = sortedFiles.count { it.isDirectory }
                 val fileCount = sortedFiles.count { !it.isDirectory }
-                tvFileCount.text = "${folderCount}개 폴더 • ${fileCount}개 파일"
+
+                // [수정됨] 0개인 항목은 생략하는 로직 적용
+                val textParts = mutableListOf<String>()
+                if (folderCount > 0) textParts.add("${folderCount}개 폴더")
+                if (fileCount > 0) textParts.add("${fileCount}개 파일")
+
+                if (textParts.isEmpty()) {
+                    tvFileCount.text = "0개 항목"
+                } else {
+                    tvFileCount.text = textParts.joinToString(" • ")
+                }
             } else {
                 tvFileCount.text = "${sortedFiles.size}개 파일"
             }
