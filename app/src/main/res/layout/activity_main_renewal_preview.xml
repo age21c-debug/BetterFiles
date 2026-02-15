@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ViewFlipper
+        android:id="@+id/vfPreviewOrder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <include layout="@layout/view_main_renewal_order_default" />
+        <include layout="@layout/view_main_renewal_order_requested" />
+        <include layout="@layout/view_main_renewal_order_c" />
+    </ViewFlipper>
+
+    <TextView
+        android:id="@+id/tvPreviewOrderHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="12dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="7dp"
+        android:background="#CC0F172A"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:textSize="12sp"
+        android:text="@string/preview_order_a" />
+
+</FrameLayout>

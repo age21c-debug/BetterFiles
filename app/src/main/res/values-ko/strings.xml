@@ -132,4 +132,13 @@
     <string name="loading_label">로딩 중...</string>
     <string name="icon_preview_title">문서 아이콘 프리뷰</string>
     <string name="icon_preview_subtitle">홈 제목을 길게 눌러 언제든 다시 열 수 있습니다.</string>
+    <string name="renewal_preview_title">메인 리뉴얼 예제</string>
+    <string name="renewal_preview_subtitle">홈의 카테고리 제목을 길게 누르면 이 화면이 열립니다.</string>
+    <string name="storage_overview">저장공간 개요</string>
+    <string name="quick_actions">빠른 작업</string>
+    <string name="apps">앱</string>
+    <string name="preview_order_a">안 1: 저장공간→최근항목→카테고리</string>
+    <string name="preview_order_b">안 2: 카테고리→최근항목→저장공간</string>
+    <string name="preview_order_c">안 3: 카테고리(3x2)→최근 파일→저장공간</string>
+    <string name="recent_files_preview">최근 파일</string>
 </resources>

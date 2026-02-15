@@ -9,6 +9,11 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import android.text.format.DateUtils
+import android.graphics.Color
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.ThumbnailUtils
+import android.view.MenuItem
 import android.view.View
 import android.webkit.MimeTypeMap
 import android.widget.LinearLayout
@@ -16,19 +21,26 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
+import androidx.core.view.GravityCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.drawerlayout.widget.DrawerLayout
+import com.google.android.material.navigation.NavigationView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import android.util.Size
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var repository: FileRepository
     private lateinit var recentAdapter: RecentFileAdapter
+    private lateinit var drawerLayoutMain: DrawerLayout
+    private lateinit var navViewMain: NavigationView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,14 +56,22 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        drawerLayoutMain = findViewById(R.id.drawerLayoutMain)
+        navViewMain = findViewById(R.id.navViewMain)
+
+        setupHomeDrawer()
+
         val btnInternal: View = findViewById(R.id.btnInternalStorage)
         val btnImages: View = findViewById(R.id.btnImages)
         val btnVideos: View = findViewById(R.id.btnVideos)
         val btnAudio: View = findViewById(R.id.btnAudio)
         val btnDocuments: View = findViewById(R.id.btnDocuments)
         val btnDownloads: View = findViewById(R.id.btnDownloads)
+        val btnApps: View = findViewById(R.id.btnApps)
+        val btnMainMenu: View = findViewById(R.id.btnMainMenu)
+        val btnHomeSearch: View = findViewById(R.id.btnHomeSearch)
         val tvRecentSeeAll: TextView = findViewById(R.id.tvRecentSeeAll)
-        val tvHomeTitle: TextView = findViewById(R.id.tvHomeTitle)
+        val tvCategoryTitle: TextView = findViewById(R.id.tvCategoryTitle)
 
         setupRecentSection()
 
@@ -83,6 +103,10 @@ class MainActivity : AppCompatActivity() {
             openActivity(mode = "download", title = getString(R.string.downloads))
         }
 
+        btnApps.setOnClickListener {
+            openActivity(mode = "app", title = getString(R.string.apps))
+        }
+
         tvRecentSeeAll.setOnClickListener {
             openActivity(
                 mode = "recent",
@@ -91,14 +115,149 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        tvHomeTitle.setOnLongClickListener {
-            startActivity(Intent(this, IconPreviewActivity::class.java))
+        btnMainMenu.setOnClickListener {
+            drawerLayoutMain.openDrawer(GravityCompat.START)
+        }
+
+        btnHomeSearch.setOnClickListener {
+            openActivity(
+                mode = "recent",
+                title = getString(R.string.recent_files),
+                path = Environment.getExternalStorageDirectory().absolutePath,
+                startSearch = true
+            )
+        }
+
+        tvCategoryTitle.setOnLongClickListener {
+            startActivity(Intent(this, MainRenewalPreviewActivity::class.java))
             true
         }
     }
 
+    private fun setupHomeDrawer() {
+        navViewMain.itemIconTintList = null
+        val menu = navViewMain.menu
+        val greyColor = Color.parseColor("#757575")
+        menu.findItem(R.id.nav_internal_storage)?.icon?.mutate()?.setTint(greyColor)
+        menu.findItem(R.id.nav_download)?.icon?.mutate()?.setTint(greyColor)
+        menu.findItem(R.id.nav_recent)?.icon?.mutate()?.setTint(greyColor)
+
+        navViewMain.setNavigationItemSelectedListener { menuItem: MenuItem ->
+            when (menuItem.itemId) {
+                R.id.nav_internal_storage -> {
+                    openActivity(
+                        mode = "folder",
+                        path = Environment.getExternalStorageDirectory().absolutePath,
+                        title = getString(R.string.internal_storage)
+                    )
+                }
+                R.id.nav_download -> {
+                    val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+                    openActivity(mode = "folder", title = getString(R.string.downloads), path = downloadPath)
+                }
+                R.id.nav_recent -> {
+                    openActivity(
+                        mode = "recent",
+                        title = getString(R.string.recent_files),
+                        path = Environment.getExternalStorageDirectory().absolutePath
+                    )
+                }
+            }
+            drawerLayoutMain.closeDrawer(GravityCompat.START)
+            true
+        }
+        updateHomeDrawerMenu()
+    }
+
+    private fun updateHomeDrawerMenu() {
+        val menu = navViewMain.menu
+        val favoritesGroup = menu.findItem(R.id.nav_favorites_section)?.subMenu ?: return
+        favoritesGroup.clear()
+
+        val favorites = FavoritesManager.getAll(this)
+        if (favorites.isEmpty()) {
+            val item = favoritesGroup.add(0, 0, 0, getString(R.string.favorites_empty))
+            item.isEnabled = false
+            return
+        }
+
+        favorites.forEachIndexed { index, path ->
+            val file = File(path)
+            val item = favoritesGroup.add(0, index + 100, 0, file.name)
+
+            if (file.isDirectory) {
+                val drawable = getDrawable(R.drawable.ic_folder_solid)?.mutate()
+                drawable?.setTint(Color.parseColor("#FFC107"))
+                item.icon = drawable
+                item.setOnMenuItemClickListener {
+                    openActivity(mode = "folder", title = file.name, path = path)
+                    drawerLayoutMain.closeDrawer(GravityCompat.START)
+                    true
+                }
+            } else {
+                val type = FileVisualRules.resolveType(file.name, isDirectory = false)
+                val iconRes = FileVisualRules.typeIconRes(type)
+                val iconColor = FileVisualRules.typeIconColor(type) ?: Color.GRAY
+                val drawable = getDrawable(iconRes)?.mutate()
+                drawable?.setTint(iconColor)
+                item.icon = drawable
+
+                if (isImageFile(file.name) || isVideoFile(file.name)) {
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val thumbnail = loadThumbnail(file)
+                        if (thumbnail != null) {
+                            withContext(Dispatchers.Main) {
+                                val roundedDrawable = RoundedBitmapDrawableFactory.create(resources, thumbnail)
+                                roundedDrawable.cornerRadius = 16f
+                                item.icon = roundedDrawable
+                            }
+                        }
+                    }
+                }
+
+                item.setOnMenuItemClickListener {
+                    openFile(file)
+                    drawerLayoutMain.closeDrawer(GravityCompat.START)
+                    true
+                }
+            }
+        }
+    }
+
+    private fun loadThumbnail(file: File): Bitmap? {
+        return try {
+            val size = Size(144, 144)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ThumbnailUtils.createImageThumbnail(file, size, null)
+            } else {
+                val options = BitmapFactory.Options().apply { inSampleSize = 4 }
+                if (isVideoFile(file.name)) {
+                    ThumbnailUtils.createVideoThumbnail(file.absolutePath, android.provider.MediaStore.Video.Thumbnails.MINI_KIND)
+                } else {
+                    BitmapFactory.decodeFile(file.absolutePath, options)
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun isImageFile(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") ||
+            lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".bmp")
+    }
+
+    private fun isVideoFile(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".avi") ||
+            lower.endsWith(".mov") || lower.endsWith(".wmv") || lower.endsWith(".webm") ||
+            lower.endsWith(".3gp")
+    }
+
     override fun onResume() {
         super.onResume()
+        updateHomeDrawerMenu()
         loadRecentFiles()
     }
 
@@ -147,6 +306,19 @@ class MainActivity : AppCompatActivity() {
             val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, resolveMimeType(file, fileItem.mimeType))
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, getString(R.string.error_no_app_to_open), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openFile(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, resolveMimeType(file, ""))
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(intent)
@@ -222,11 +394,12 @@ class MainActivity : AppCompatActivity() {
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
     }
 
-    private fun openActivity(mode: String, title: String, path: String = "") {
+    private fun openActivity(mode: String, title: String, path: String = "", startSearch: Boolean = false) {
         val intent = Intent(this, FileListActivity::class.java)
         intent.putExtra("mode", mode)
         intent.putExtra("title", title)
         intent.putExtra("path", path)
+        intent.putExtra("startSearch", startSearch)
         startActivity(intent)
     }
 }

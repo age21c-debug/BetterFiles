@@ -83,6 +83,7 @@ class FileListActivity : AppCompatActivity() {
     private var isAscending = true
     private var lastRecentSearchQueryForSortReset: String? = null
     private var isRecentCountLoading: Boolean = false
+    private var finishOnSearchBack: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -99,6 +100,7 @@ class FileListActivity : AppCompatActivity() {
         val intentTitle = intent.getStringExtra("title") ?: getString(R.string.default_page_title)
         currentMode = intent.getStringExtra("mode") ?: "folder"
         val intentPath = intent.getStringExtra("path") ?: Environment.getExternalStorageDirectory().absolutePath
+        finishOnSearchBack = intent.getBooleanExtra("startSearch", false)
 
         rootTitle = intentTitle
         rootPath = intentPath
@@ -149,7 +151,7 @@ class FileListActivity : AppCompatActivity() {
                 } else if (isSelectionMode) {
                     closeSelectionMode()
                 } else if (isSearchMode) {
-                    closeSearchMode()
+                    if (finishOnSearchBack) finish() else closeSearchMode()
                 } else {
                     handleBackAction()
                 }
@@ -157,6 +159,12 @@ class FileListActivity : AppCompatActivity() {
         })
 
         loadData(currentMode, rootPath)
+
+        if (intent.getBooleanExtra("startSearch", false)) {
+            findViewById<View>(android.R.id.content).post {
+                enterSearchMode()
+            }
+        }
     }
 
     // ?쇄뼹???쒕줈??利먭꺼李얘린) 愿??濡쒖쭅 ?쇄뼹??
@@ -882,28 +890,12 @@ class FileListActivity : AppCompatActivity() {
         btnNewFolder.setOnClickListener { showCreateFolderDialog() }
 
         btnSearch.setOnClickListener {
-            isSearchMode = true
-            val btnSearchSort: ImageView = findViewById(R.id.btnSearchSort)
-            if (currentMode == "recent") {
-                currentSortMode = "date"
-                isAscending = false
-                btnSearchSort.visibility = View.VISIBLE
-            } else {
-                currentSortMode = "name"
-                isAscending = true
-                btnSearchSort.visibility = View.VISIBLE
-            }
-
-            headerNormal.visibility = View.GONE
-            headerSearch.visibility = View.VISIBLE
-            etSearch.setText("")
-            etSearch.requestFocus()
-
-            val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.showSoftInput(etSearch, InputMethodManager.SHOW_IMPLICIT)
+            enterSearchMode()
         }
 
-        btnCloseSearch.setOnClickListener { closeSearchMode() }
+        btnCloseSearch.setOnClickListener {
+            if (finishOnSearchBack) finish() else closeSearchMode()
+        }
 
         etSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -913,6 +905,31 @@ class FileListActivity : AppCompatActivity() {
             }
             override fun afterTextChanged(s: Editable?) {}
         })
+    }
+
+    private fun enterSearchMode() {
+        val etSearch: EditText = findViewById(R.id.etSearch)
+        val headerNormal: LinearLayout = findViewById(R.id.headerNormal)
+        val headerSearch: LinearLayout = findViewById(R.id.headerSearch)
+        val btnSearchSort: ImageView = findViewById(R.id.btnSearchSort)
+
+        isSearchMode = true
+        if (currentMode == "recent") {
+            currentSortMode = "date"
+            isAscending = false
+        } else {
+            currentSortMode = "name"
+            isAscending = true
+        }
+        btnSearchSort.visibility = View.VISIBLE
+
+        headerNormal.visibility = View.GONE
+        headerSearch.visibility = View.VISIBLE
+        etSearch.setText("")
+        etSearch.requestFocus()
+
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.showSoftInput(etSearch, InputMethodManager.SHOW_IMPLICIT)
     }
 
     private fun performSearch(query: String) {
@@ -930,6 +947,7 @@ class FileListActivity : AppCompatActivity() {
                     "video" -> repository.getAllVideos()
                     "audio" -> repository.getAllAudio()
                     "document" -> repository.getAllDocuments()
+                    "app" -> repository.getAllApps()
                     "download" -> repository.getDownloads()
                     "recent" -> repository.getRecentFiles(maxAgeDays = null)
                     else -> repository.getFilesByPath(currentPath)
@@ -945,6 +963,7 @@ class FileListActivity : AppCompatActivity() {
                 "video" -> repository.getAllVideos(query)
                 "audio" -> repository.getAllAudio(query)
                 "document" -> repository.getAllDocuments(query)
+                "app" -> repository.getAllApps(query)
                 "recent" -> repository.getRecentFiles(query = query, maxAgeDays = null)
                 "download" -> {
                     val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
@@ -1058,6 +1077,7 @@ class FileListActivity : AppCompatActivity() {
                 currentMode == "video" ||
                 currentMode == "audio" ||
                 currentMode == "document" ||
+                currentMode == "app" ||
                 currentMode == "download"
             adapter.showDateHeaders = supportsDateSections && currentSortMode == "date"
             adapter.submitList(sortedFiles)
@@ -1174,6 +1194,7 @@ class FileListActivity : AppCompatActivity() {
                 "video" -> repository.getAllVideos()
                 "audio" -> repository.getAllAudio()
                 "document" -> repository.getAllDocuments()
+                "app" -> repository.getAllApps()
                 "download" -> repository.getDownloads()
                 else -> repository.getFilesByPath(path)
             }

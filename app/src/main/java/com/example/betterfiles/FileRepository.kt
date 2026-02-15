@@ -86,6 +86,25 @@ class FileRepository(private val context: Context) {
         queryMediaStore(collection, selectionParts.joinToString(" AND "), selectionArgs.toTypedArray(), sortOrder)
     }
 
+    suspend fun getAllApps(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
+        val collection = MediaStore.Files.getContentUri("external")
+        val sortOrder = "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
+        val selectionParts = mutableListOf(
+            "(${MediaStore.Files.FileColumns.MIME_TYPE} = ? OR ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?)"
+        )
+        val selectionArgs = mutableListOf(
+            "application/vnd.android.package-archive",
+            "%.apk"
+        )
+
+        if (query != null) {
+            selectionParts += "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+            selectionArgs += "%$query%"
+        }
+
+        queryMediaStore(collection, selectionParts.joinToString(" AND "), selectionArgs.toTypedArray(), sortOrder)
+    }
+
     suspend fun getRecentFiles(
         query: String? = null,
         limit: Int? = null,

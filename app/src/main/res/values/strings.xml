@@ -28,6 +28,8 @@
     <string name="action_location">Go to location</string>
     <string name="action_info">Info</string>
     <string name="action_back">Back</string>
+    <string name="action_open_drawer">Open drawer</string>
+    <string name="action_search">Search</string>
 
     <string name="menu_favorite_add">Add to favorites</string>
     <string name="menu_share">Share</string>
@@ -142,6 +144,15 @@
     <string name="loading_label">Loading...</string>
     <string name="icon_preview_title">Document Icon Preview</string>
     <string name="icon_preview_subtitle">Long-press the home title to open this preview screen again.</string>
+    <string name="renewal_preview_title">Main Renewal Preview</string>
+    <string name="renewal_preview_subtitle">Long-press the category title on home to open this example.</string>
+    <string name="storage_overview">Storage Overview</string>
+    <string name="quick_actions">Quick Actions</string>
+    <string name="apps">Apps</string>
+    <string name="preview_order_a">Order A: Storage→Recent→Category</string>
+    <string name="preview_order_b">Order B: Category→Recent→Storage</string>
+    <string name="preview_order_c">Order C: Category(3x2)→Recent Files→Storage</string>
+    <string name="recent_files_preview">Recent Files</string>
 </resources>
 
 
