@@ -148,7 +148,7 @@
     <string name="icon_preview_subtitle">Long-press the home title to open this preview screen again.</string>
     <string name="renewal_preview_title">Main Renewal Preview</string>
     <string name="renewal_preview_subtitle">Long-press the category title on home to open this example.</string>
-    <string name="storage_overview">Storage Overview</string>
+    <string name="storage_overview">Storage</string>
     <string name="quick_actions">Quick Actions</string>
     <string name="apps">Apps</string>
     <string name="preview_order_a">Order A: Storage→Recent→Category</string>
