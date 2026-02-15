@@ -761,7 +761,9 @@ class FileListActivity : AppCompatActivity() {
         val defaultName = if (selectedItems.size == 1) {
             File(selectedItems.first().path).nameWithoutExtension
         } else {
-            File(currentPath).name // ?꾩옱 ?대뜑 ?대쫫
+            val firstName = File(selectedItems.first().path).nameWithoutExtension
+                .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            firstName
         }
         editText.setText(defaultName)
         editText.selectAll()
@@ -790,7 +792,15 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun performZip(items: List<FileItem>, zipName: String) {
-        val targetDir = File(currentPath)
+        val targetDir = resolveZipTargetDir()
+        if (!targetDir.exists() && !targetDir.mkdirs()) {
+            Toast.makeText(this, getString(R.string.folder_create_failed), Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!targetDir.canWrite()) {
+            Toast.makeText(this, getString(R.string.folder_not_writable), Toast.LENGTH_SHORT).show()
+            return
+        }
         val finalName = if (zipName.endsWith(".zip", ignoreCase = true)) zipName else "$zipName.zip"
         val zipFile = getUniqueFile(targetDir, finalName)
 
@@ -813,6 +823,14 @@ class FileListActivity : AppCompatActivity() {
                     Toast.makeText(this@FileListActivity, getString(R.string.zip_failed_format, e.message ?: ""), Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    private fun resolveZipTargetDir(): File {
+        return if (currentMode == "folder") {
+            File(currentPath)
+        } else {
+            File(rootPath, "Compressed files")
         }
     }
 
@@ -1412,6 +1430,9 @@ class FileListActivity : AppCompatActivity() {
         if (oldFile.renameTo(newFile)) {
             Toast.makeText(this, getString(R.string.rename_success), Toast.LENGTH_SHORT).show()
             MediaScannerConnection.scanFile(this, arrayOf(oldFile.absolutePath, newFile.absolutePath), null, null)
+            if (isSelectionMode) {
+                closeSelectionMode()
+            }
             loadData(currentMode, currentPath)
         } else {
             Toast.makeText(this, getString(R.string.rename_failed), Toast.LENGTH_SHORT).show()
