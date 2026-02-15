@@ -201,16 +201,17 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        favorites.forEachIndexed { index, path ->
-            val file = File(path)
-            val item = favoritesGroup.add(0, index + 100, 0, file.name)
+        favorites.forEachIndexed { index, entry ->
+            val file = File(entry.path)
+            val title = entry.name ?: file.name
+            val item = favoritesGroup.add(0, index + 100, 0, title)
 
-            if (file.isDirectory) {
+            if (entry.isDirectory) {
                 val drawable = getDrawable(R.drawable.ic_folder_solid)?.mutate()
                 drawable?.setTint(Color.parseColor("#FFC107"))
                 item.icon = drawable
                 item.setOnMenuItemClickListener {
-                    openActivity(mode = "folder", title = file.name, path = path)
+                    openActivity(mode = "folder", title = title, path = entry.path)
                     drawerLayoutMain.closeDrawer(GravityCompat.START)
                     true
                 }

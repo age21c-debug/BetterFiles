@@ -253,18 +253,19 @@ class FileListActivity : AppCompatActivity() {
             val item = favoritesGroup.add(0, 0, 0, getString(R.string.favorites_empty))
             item.isEnabled = false
         } else {
-            favorites.forEachIndexed { index, path ->
-                val file = File(path)
-                val item = favoritesGroup.add(0, index + 100, 0, file.name)
+            favorites.forEachIndexed { index, entry ->
+                val file = File(entry.path)
+                val title = entry.name ?: file.name
+                val item = favoritesGroup.add(0, index + 100, 0, title)
 
-                if (file.isDirectory) {
+                if (entry.isDirectory) {
                     // Folder favorite icon tint
                     val drawable = getDrawable(R.drawable.ic_folder_solid)?.mutate()
                     drawable?.setTint(Color.parseColor("#FFC107")) // ?몃????곸슜
                     item.icon = drawable
 
                     item.setOnMenuItemClickListener {
-                        loadData("folder", path)
+                        loadData("folder", entry.path)
                         drawerLayout.closeDrawer(GravityCompat.START)
                         true
                     }
@@ -712,7 +713,7 @@ class FileListActivity : AppCompatActivity() {
         favoriteItem.isVisible = selectedItems.size == 1
         renameItem.isVisible = selectedItems.size == 1
         if (selectedItems.size == 1) {
-            val isFav = FavoritesManager.isFavorite(this, selectedItems.first().path)
+            val isFav = FavoritesManager.isFavorite(this, selectedItems.first())
             favoriteItem.title = if (isFav) getString(R.string.favorite_remove) else getString(R.string.menu_favorite_add)
         }
 
@@ -1308,7 +1309,7 @@ class FileListActivity : AppCompatActivity() {
 
         // 利먭꺼李얘린 硫붾돱 ?ㅼ젙
         val favItem = popup.menu.findItem(R.id.action_favorite)
-        val isFav = FavoritesManager.isFavorite(this, fileItem.path)
+        val isFav = FavoritesManager.isFavorite(this, fileItem)
 
         // [蹂寃? ?대뜑/?뚯씪 援щ텇 ?놁씠 利먭꺼李얘린 硫붾돱 ?쒖꽦??
         favItem.isVisible = true
@@ -1334,11 +1335,11 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun toggleFavorite(fileItem: FileItem) {
-        if (FavoritesManager.isFavorite(this, fileItem.path)) {
-            FavoritesManager.remove(this, fileItem.path)
+        if (FavoritesManager.isFavorite(this, fileItem)) {
+            FavoritesManager.remove(this, fileItem)
             Toast.makeText(this, getString(R.string.favorite_removed), Toast.LENGTH_SHORT).show()
         } else {
-            FavoritesManager.add(this, fileItem.path)
+            FavoritesManager.add(this, fileItem)
             Toast.makeText(this, getString(R.string.favorite_added), Toast.LENGTH_SHORT).show()
         }
         updateDrawerMenu()
@@ -1430,6 +1431,13 @@ class FileListActivity : AppCompatActivity() {
         if (oldFile.renameTo(newFile)) {
             Toast.makeText(this, getString(R.string.rename_success), Toast.LENGTH_SHORT).show()
             MediaScannerConnection.scanFile(this, arrayOf(oldFile.absolutePath, newFile.absolutePath), null, null)
+            FavoritesManager.onPathRenamed(
+                context = this,
+                oldPath = oldFile.absolutePath,
+                newPath = newFile.absolutePath,
+                isDirectory = oldFile.isDirectory
+            )
+            updateDrawerMenu()
             if (isSelectionMode) {
                 closeSelectionMode()
             }
