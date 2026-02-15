@@ -48,8 +48,10 @@ class MainActivity : AppCompatActivity() {
         val btnImages: View = findViewById(R.id.btnImages)
         val btnVideos: View = findViewById(R.id.btnVideos)
         val btnAudio: View = findViewById(R.id.btnAudio)
+        val btnDocuments: View = findViewById(R.id.btnDocuments)
         val btnDownloads: View = findViewById(R.id.btnDownloads)
         val tvRecentSeeAll: TextView = findViewById(R.id.tvRecentSeeAll)
+        val tvHomeTitle: TextView = findViewById(R.id.tvHomeTitle)
 
         setupRecentSection()
 
@@ -73,6 +75,10 @@ class MainActivity : AppCompatActivity() {
             openActivity(mode = "audio", title = getString(R.string.audio))
         }
 
+        btnDocuments.setOnClickListener {
+            openActivity(mode = "document", title = getString(R.string.documents))
+        }
+
         btnDownloads.setOnClickListener {
             openActivity(mode = "download", title = getString(R.string.downloads))
         }
@@ -83,6 +89,11 @@ class MainActivity : AppCompatActivity() {
                 title = getString(R.string.recent_files),
                 path = Environment.getExternalStorageDirectory().absolutePath
             )
+        }
+
+        tvHomeTitle.setOnLongClickListener {
+            startActivity(Intent(this, IconPreviewActivity::class.java))
+            true
         }
     }
 

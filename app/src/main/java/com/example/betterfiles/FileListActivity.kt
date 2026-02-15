@@ -929,6 +929,7 @@ class FileListActivity : AppCompatActivity() {
                     "image" -> repository.getAllImages()
                     "video" -> repository.getAllVideos()
                     "audio" -> repository.getAllAudio()
+                    "document" -> repository.getAllDocuments()
                     "download" -> repository.getDownloads()
                     "recent" -> repository.getRecentFiles(maxAgeDays = null)
                     else -> repository.getFilesByPath(currentPath)
@@ -943,6 +944,7 @@ class FileListActivity : AppCompatActivity() {
                 "image" -> repository.getAllImages(query)
                 "video" -> repository.getAllVideos(query)
                 "audio" -> repository.getAllAudio(query)
+                "document" -> repository.getAllDocuments(query)
                 "recent" -> repository.getRecentFiles(query = query, maxAgeDays = null)
                 "download" -> {
                     val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
@@ -1055,6 +1057,7 @@ class FileListActivity : AppCompatActivity() {
                 currentMode == "image" ||
                 currentMode == "video" ||
                 currentMode == "audio" ||
+                currentMode == "document" ||
                 currentMode == "download"
             adapter.showDateHeaders = supportsDateSections && currentSortMode == "date"
             adapter.submitList(sortedFiles)
@@ -1170,6 +1173,7 @@ class FileListActivity : AppCompatActivity() {
                 "image" -> repository.getAllImages()
                 "video" -> repository.getAllVideos()
                 "audio" -> repository.getAllAudio()
+                "document" -> repository.getAllDocuments()
                 "download" -> repository.getDownloads()
                 else -> repository.getFilesByPath(path)
             }

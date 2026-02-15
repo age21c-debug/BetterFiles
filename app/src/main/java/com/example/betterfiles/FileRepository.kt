@@ -61,6 +61,31 @@ class FileRepository(private val context: Context) {
         queryMediaStore(collection, selection, selectionArgs, sortOrder)
     }
 
+    // 5. 문서 파일 가져오기 (전체 or 검색)
+    suspend fun getAllDocuments(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
+        val collection = MediaStore.Files.getContentUri("external")
+        val sortOrder = "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
+        val selectionParts = mutableListOf(
+            "${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL",
+            "(${MediaStore.Files.FileColumns.MIME_TYPE} LIKE ? OR ${MediaStore.Files.FileColumns.MIME_TYPE} LIKE ?)",
+            "${MediaStore.Files.FileColumns.MIME_TYPE} != ?",
+            "${MediaStore.Files.FileColumns.MIME_TYPE} != ?"
+        )
+        val selectionArgs = mutableListOf(
+            "application/%",
+            "text/%",
+            "application/vnd.android.package-archive",
+            "application/zip"
+        )
+
+        if (query != null) {
+            selectionParts += "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+            selectionArgs += "%$query%"
+        }
+
+        queryMediaStore(collection, selectionParts.joinToString(" AND "), selectionArgs.toTypedArray(), sortOrder)
+    }
+
     suspend fun getRecentFiles(
         query: String? = null,
         limit: Int? = null,

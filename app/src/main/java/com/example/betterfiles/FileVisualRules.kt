@@ -22,6 +22,10 @@ object FileVisualRules {
         VIDEO,
         APK,
         PDF,
+        DOC_WORD,
+        DOC_EXCEL,
+        DOC_POWERPOINT,
+        DOC_HWP,
         VOICE,
         AUDIO,
         ZIP,
@@ -39,6 +43,10 @@ object FileVisualRules {
             isVideo(lowerName, lowerMime) -> FileType.VIDEO
             isApk(lowerName, lowerMime) -> FileType.APK
             isPdf(lowerName, lowerMime) -> FileType.PDF
+            isWordDoc(lowerName, lowerMime) -> FileType.DOC_WORD
+            isExcelDoc(lowerName, lowerMime) -> FileType.DOC_EXCEL
+            isPowerPointDoc(lowerName, lowerMime) -> FileType.DOC_POWERPOINT
+            isHwpDoc(lowerName, lowerMime) -> FileType.DOC_HWP
             isVoice(lowerName, lowerMime) -> FileType.VOICE
             isAudio(lowerName, lowerMime) -> FileType.AUDIO
             isZip(lowerName) -> FileType.ZIP
@@ -53,6 +61,10 @@ object FileVisualRules {
             FileType.VIDEO -> R.drawable.ic_video
             FileType.APK -> R.drawable.ic_android_file
             FileType.PDF -> R.drawable.ic_pdf
+            FileType.DOC_WORD -> R.drawable.ic_doc_word
+            FileType.DOC_EXCEL -> R.drawable.ic_doc_excel
+            FileType.DOC_POWERPOINT -> R.drawable.ic_doc_powerpoint
+            FileType.DOC_HWP -> R.drawable.ic_doc_hwp
             FileType.VOICE -> R.drawable.ic_mic
             FileType.AUDIO -> R.drawable.ic_music_note
             FileType.ZIP -> R.drawable.ic_zip
@@ -67,6 +79,10 @@ object FileVisualRules {
             FileType.VIDEO -> Color.parseColor("#1565C0")
             FileType.APK -> Color.parseColor("#3DDC84")
             FileType.PDF -> Color.parseColor("#F44336")
+            FileType.DOC_WORD -> null
+            FileType.DOC_EXCEL -> null
+            FileType.DOC_POWERPOINT -> null
+            FileType.DOC_HWP -> null
             FileType.VOICE -> Color.parseColor("#009688")
             FileType.AUDIO -> Color.parseColor("#9C27B0")
             FileType.ZIP -> Color.parseColor("#FFC107")
@@ -235,6 +251,33 @@ object FileVisualRules {
 
     private fun isPdf(lowerName: String, lowerMime: String): Boolean {
         return lowerMime == "application/pdf" || lowerName.endsWith(".pdf")
+    }
+
+    private fun isWordDoc(lowerName: String, lowerMime: String): Boolean {
+        return lowerName.endsWith(".doc") || lowerName.endsWith(".docx") ||
+            lowerMime == "application/msword" ||
+            lowerMime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    }
+
+    private fun isExcelDoc(lowerName: String, lowerMime: String): Boolean {
+        return lowerName.endsWith(".xls") || lowerName.endsWith(".xlsx") || lowerName.endsWith(".csv") ||
+            lowerMime == "application/vnd.ms-excel" ||
+            lowerMime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+            lowerMime == "text/csv"
+    }
+
+    private fun isPowerPointDoc(lowerName: String, lowerMime: String): Boolean {
+        return lowerName.endsWith(".ppt") || lowerName.endsWith(".pptx") ||
+            lowerName.endsWith(".pps") || lowerName.endsWith(".ppsx") ||
+            lowerMime == "application/vnd.ms-powerpoint" ||
+            lowerMime == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    }
+
+    private fun isHwpDoc(lowerName: String, lowerMime: String): Boolean {
+        return lowerName.endsWith(".hwp") || lowerName.endsWith(".hwpx") ||
+            lowerMime == "application/x-hwp" ||
+            lowerMime == "application/haansofthwp" ||
+            lowerMime == "application/hwp+zip"
     }
 
     private fun isVoice(lowerName: String, lowerMime: String): Boolean {
