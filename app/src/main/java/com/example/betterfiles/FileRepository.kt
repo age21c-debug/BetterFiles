@@ -7,6 +7,8 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
@@ -79,15 +81,17 @@ class FileRepository(private val context: Context) {
     suspend fun searchRecursive(path: String, query: String): List<FileItem> = withContext(Dispatchers.IO) {
         val resultList = mutableListOf<FileItem>()
         val rootDir = File(path)
+        val coroutineContext = currentCoroutineContext()
 
         if (!rootDir.exists() || !rootDir.isDirectory) return@withContext emptyList()
 
         fun traverse(dir: File) {
+            coroutineContext.ensureActive()
             val list = dir.listFiles() ?: return
 
             for (file in list) {
                 if (file.name.startsWith(".")) continue
-                if (Thread.currentThread().isInterrupted) return
+                coroutineContext.ensureActive()
 
                 if (file.name.contains(query, ignoreCase = true)) {
                     resultList.add(fileToFileItem(file))
@@ -136,6 +140,7 @@ class FileRepository(private val context: Context) {
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.DISPLAY_NAME,
             MediaStore.MediaColumns.DATA,
+            MediaStore.MediaColumns.RELATIVE_PATH,
             MediaStore.MediaColumns.SIZE,
             MediaStore.MediaColumns.DATE_MODIFIED,
             MediaStore.MediaColumns.MIME_TYPE
@@ -147,7 +152,8 @@ class FileRepository(private val context: Context) {
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
                 val nameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
-                val pathCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATA)
+                val pathCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                val relativePathCol = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
                 val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_MODIFIED)
                 val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
@@ -155,7 +161,15 @@ class FileRepository(private val context: Context) {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
                     val name = cursor.getString(nameCol) ?: "Unknown"
-                    val path = cursor.getString(pathCol) ?: ""
+                    val dataPath = if (pathCol >= 0) cursor.getString(pathCol) else null
+                    val relativePath = if (relativePathCol >= 0) cursor.getString(relativePathCol) else null
+                    val path = when {
+                        !dataPath.isNullOrBlank() -> dataPath
+                        !relativePath.isNullOrBlank() -> {
+                            File(Environment.getExternalStorageDirectory(), relativePath).resolve(name).absolutePath
+                        }
+                        else -> name
+                    }
                     val size = cursor.getLong(sizeCol)
                     val dateModified = cursor.getLong(dateCol)
                     val mimeType = cursor.getString(mimeCol) ?: "application/octet-stream"

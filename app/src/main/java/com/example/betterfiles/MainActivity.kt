@@ -14,7 +14,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 권한 체크 로직 (그대로 유지)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
                 val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
@@ -23,48 +22,42 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 버튼 연결
         val btnInternal: View = findViewById(R.id.btnInternalStorage)
         val btnImages: View = findViewById(R.id.btnImages)
         val btnVideos: View = findViewById(R.id.btnVideos)
         val btnAudio: View = findViewById(R.id.btnAudio)
         val btnDownloads: View = findViewById(R.id.btnDownloads)
 
-        // 1. 내장 저장공간 (폴더 탐색 모드)
         btnInternal.setOnClickListener {
             openActivity(
                 mode = "folder",
                 path = Environment.getExternalStorageDirectory().absolutePath,
-                title = "내장 저장공간"
+                title = getString(R.string.internal_storage)
             )
         }
 
-        // 2. 이미지 (전체 이미지 모드 - MediaStore)
         btnImages.setOnClickListener {
-            openActivity(mode = "image", title = "이미지")
+            openActivity(mode = "image", title = getString(R.string.images))
         }
 
-        // 3. 동영상 (전체 동영상 모드 - MediaStore)
         btnVideos.setOnClickListener {
-            openActivity(mode = "video", title = "동영상")
+            openActivity(mode = "video", title = getString(R.string.videos))
         }
 
-        // 4. 오디오 (전체 오디오 모드 - MediaStore)
         btnAudio.setOnClickListener {
-            openActivity(mode = "audio", title = "오디오")
+            openActivity(mode = "audio", title = getString(R.string.audio))
         }
 
-        // 5. 다운로드
         btnDownloads.setOnClickListener {
-            openActivity(mode = "download", title = "다운로드")
+            openActivity(mode = "download", title = getString(R.string.downloads))
         }
     }
 
     private fun openActivity(mode: String, title: String, path: String = "") {
         val intent = Intent(this, FileListActivity::class.java)
-        intent.putExtra("mode", mode)   // 핵심: "image", "folder" 등 모드 전달
-        intent.putExtra("title", title) // 제목 전달
-        intent.putExtra("path", path)   // 경로 전달 (folder 모드일 때만 씀)
+        intent.putExtra("mode", mode)
+        intent.putExtra("title", title)
+        intent.putExtra("path", path)
         startActivity(intent)
     }
 }

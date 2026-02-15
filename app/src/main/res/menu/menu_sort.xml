@@ -2,7 +2,7 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item
-        android:title="정렬 기준"
+        android:title="@string/sort_section_title"
         android:enabled="false" />
 
     <group
@@ -10,17 +10,17 @@
         android:checkableBehavior="single">
         <item
             android:id="@+id/sort_date"
-            android:title="날짜순" />
+            android:title="@string/sort_date" />
         <item
             android:id="@+id/sort_name"
-            android:title="이름순" />
+            android:title="@string/sort_name" />
         <item
             android:id="@+id/sort_size"
-            android:title="크기순" />
+            android:title="@string/sort_size" />
     </group>
 
     <item
-        android:title="순서 방식"
+        android:title="@string/sort_order_section_title"
         android:enabled="false" />
 
     <group
@@ -28,10 +28,10 @@
         android:checkableBehavior="single">
         <item
             android:id="@+id/order_asc"
-            android:title="오름차순" />
+            android:title="@string/sort_asc" />
         <item
             android:id="@+id/order_desc"
-            android:title="내림차순" />
+            android:title="@string/sort_desc" />
     </group>
 
 </menu>

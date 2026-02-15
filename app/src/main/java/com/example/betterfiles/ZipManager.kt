@@ -59,12 +59,21 @@ object ZipManager {
     // 압축 풀기 (zip 파일 -> 대상 폴더)
     fun unzip(zipFile: File, targetDir: File) {
         if (!targetDir.exists()) targetDir.mkdirs()
+        val canonicalTargetDir = targetDir.canonicalFile
 
         ZipInputStream(BufferedInputStream(FileInputStream(zipFile))).use { zis ->
             var entry: ZipEntry?
             while (zis.nextEntry.also { entry = it } != null) {
                 val currentEntry = entry!!
-                val destFile = File(targetDir, currentEntry.name)
+                val destFile = File(targetDir, currentEntry.name).canonicalFile
+
+                // Prevent Zip Slip: every extracted path must stay under targetDir.
+                val isInsideTarget =
+                    destFile.path == canonicalTargetDir.path ||
+                        destFile.path.startsWith(canonicalTargetDir.path + File.separator)
+                if (!isInsideTarget) {
+                    throw SecurityException("Invalid zip entry path: ${currentEntry.name}")
+                }
 
                 if (currentEntry.isDirectory) {
                     destFile.mkdirs()
@@ -78,6 +87,7 @@ object ZipManager {
                         }
                     }
                 }
+                zis.closeEntry()
             }
         }
     }

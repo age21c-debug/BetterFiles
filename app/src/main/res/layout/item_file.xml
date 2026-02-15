@@ -36,7 +36,7 @@
             android:id="@+id/tvName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="파일 이름.jpg"
+            android:text="@string/item_filename_sample"
             android:textSize="16sp"
             android:textStyle="bold"
             android:textColor="#111111"
@@ -47,7 +47,7 @@
             android:id="@+id/tvSize"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="2024.01.31"
+            android:text="@string/item_date_sample"
             android:textSize="13sp"
             android:textColor="#888888"
             android:layout_marginTop="2dp"/>

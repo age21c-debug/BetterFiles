@@ -2,27 +2,27 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/action_favorite"
-        android:title="즐겨찾기 추가"
+        android:title="@string/menu_favorite_add"
         android:icon="@drawable/ic_star" />
 
     <item
         android:id="@+id/action_share"
-        android:title="공유"
+        android:title="@string/menu_share"
         android:icon="@android:drawable/ic_menu_share"/>
     <item
         android:id="@+id/action_zip"
-        android:title="압축"
+        android:title="@string/menu_zip"
         android:icon="@drawable/ic_zip" />
     <item
         android:id="@+id/action_rename"
-        android:title="이름 변경"
+        android:title="@string/menu_rename"
         android:icon="@android:drawable/ic_menu_edit" />
     <item
         android:id="@+id/action_delete"
-        android:title="삭제"
+        android:title="@string/menu_delete"
         android:icon="@android:drawable/ic_menu_delete"/>
     <item
         android:id="@+id/action_details"
-        android:title="상세 정보"
+        android:title="@string/menu_details"
         android:icon="@android:drawable/ic_menu_info_details"/>
 </menu>

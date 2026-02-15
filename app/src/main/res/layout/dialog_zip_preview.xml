@@ -9,7 +9,7 @@
         android:id="@+id/tvZipName"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Archive.zip"
+        android:text="@string/zip_name_sample"
         android:textSize="20sp"
         android:textStyle="bold"
         android:textColor="#111111"
@@ -19,7 +19,7 @@
         android:id="@+id/tvZipSummary"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="정보 읽는 중..."
+        android:text="@string/zip_info_loading"
         android:textSize="14sp"
         android:textColor="#1E88E5"
         android:layout_marginBottom="16dp"/>
@@ -33,7 +33,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="포함된 파일:"
+        android:text="@string/zip_included_files"
         android:textSize="14sp"
         android:textColor="#757575"
         android:layout_marginBottom="8dp"/>

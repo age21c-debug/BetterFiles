@@ -803,7 +803,11 @@ class FileListActivity : AppCompatActivity() {
 
         items.forEach { item ->
             val file = File(item.path)
-            if (file.exists() && file.delete()) {
+            val existedBeforeDelete = file.exists()
+            if (!existedBeforeDelete) return@forEach
+            if (file.isDirectory) file.deleteRecursively() else file.delete()
+            val deleted = !file.exists()
+            if (deleted) {
                 deletedCount++
                 pathsToScan.add(file.absolutePath)
             }
@@ -1253,7 +1257,9 @@ class FileListActivity : AppCompatActivity() {
     private fun deleteFile(fileItem: FileItem) {
         val file = File(fileItem.path)
         if (file.exists()) {
-            if (file.delete()) {
+            if (file.isDirectory) file.deleteRecursively() else file.delete()
+            val deleted = !file.exists()
+            if (deleted) {
                 Toast.makeText(this, "삭제되었습니다.", Toast.LENGTH_SHORT).show()
                 MediaScannerConnection.scanFile(this, arrayOf(file.absolutePath), null, null)
                 loadData(currentMode, currentPath)

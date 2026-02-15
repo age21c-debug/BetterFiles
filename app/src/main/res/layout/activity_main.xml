@@ -12,7 +12,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Better Files"
+        android:text="@string/home_title"
         android:textSize="28sp"
         android:textStyle="bold"
         android:textColor="#111111"
@@ -50,7 +50,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="내장 저장공간"
+                    android:text="@string/internal_storage"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:textColor="#111111"/>
@@ -58,7 +58,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="모든 파일 탐색"
+                    android:text="@string/all_files_browse"
                     android:textSize="14sp"
                     android:textColor="#888888"
                     android:layout_marginTop="4dp"/>
@@ -69,7 +69,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="카테고리"
+        android:text="@string/category_title"
         android:textSize="16sp"
         android:textStyle="bold"
         android:textColor="#555555"
@@ -105,7 +105,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="이미지"
+                    android:text="@string/images"
                     android:textStyle="bold"/>
             </LinearLayout>
 
@@ -127,7 +127,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="동영상"
+                    android:text="@string/videos"
                     android:textStyle="bold"/>
             </LinearLayout>
         </LinearLayout>
@@ -156,7 +156,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="오디오"
+                    android:text="@string/audio"
                     android:textStyle="bold"/>
             </LinearLayout>
 
@@ -178,7 +178,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="다운로드"
+                    android:text="@string/downloads"
                     android:textStyle="bold"/>
             </LinearLayout>
         </LinearLayout>

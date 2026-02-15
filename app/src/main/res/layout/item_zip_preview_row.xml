@@ -12,13 +12,13 @@
         android:layout_height="24dp"
         android:src="@drawable/ic_file"
         android:layout_marginEnd="12dp"
-        android:contentDescription="icon"/>
+        android:contentDescription="@string/zip_item_icon_content_description"/>
 
     <TextView
         android:id="@+id/tvZipItemName"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="filename.txt"
+        android:text="@string/zip_item_filename_sample"
         android:textSize="14sp"
         android:textColor="#424242"
         android:singleLine="true"

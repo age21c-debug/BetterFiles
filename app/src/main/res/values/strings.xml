@@ -1,3 +1,67 @@
 <resources>
     <string name="app_name">BetterFiles</string>
+
+    <string name="home_title">Better Files</string>
+    <string name="category_title">Categories</string>
+    <string name="internal_storage">Internal Storage</string>
+    <string name="all_files_browse">Browse all files</string>
+    <string name="images">Images</string>
+    <string name="videos">Videos</string>
+    <string name="audio">Audio</string>
+    <string name="downloads">Downloads</string>
+
+    <string name="file_count_zero">0 files</string>
+    <string name="path_indicator_sample">Internal Storage &gt; Parent folder</string>
+    <string name="search_hint_recursive">Search including subfolders...</string>
+    <string name="selection_count_zero">0 selected</string>
+    <string name="empty_folder_title">This folder is empty</string>
+    <string name="empty_folder_message">No files found.</string>
+    <string name="paste_info_sample">1 item copied...</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_paste">Paste</string>
+    <string name="action_select_all">Select all</string>
+    <string name="action_more">More</string>
+
+    <string name="menu_favorite_add">Add to favorites</string>
+    <string name="menu_share">Share</string>
+    <string name="menu_zip">Compress</string>
+    <string name="menu_rename">Rename</string>
+    <string name="menu_delete">Delete</string>
+    <string name="menu_details">Details</string>
+
+    <string name="menu_copy">Copy</string>
+    <string name="menu_move">Move</string>
+
+    <string name="drawer_favorites">Favorites</string>
+
+    <string name="sort_section_title">Sort by</string>
+    <string name="sort_date">Date</string>
+    <string name="sort_name">Name</string>
+    <string name="sort_size">Size</string>
+    <string name="sort_order_section_title">Order</string>
+    <string name="sort_asc">Ascending</string>
+    <string name="sort_desc">Descending</string>
+
+    <string name="details_name_sample">FileName.txt</string>
+    <string name="details_type_label">Type</string>
+    <string name="details_type_sample">Folder</string>
+    <string name="details_size_label">Size</string>
+    <string name="details_size_sample">12.5 MB</string>
+    <string name="details_date_label">Modified</string>
+    <string name="details_date_sample">2023. 10. 25. 14:30</string>
+    <string name="details_path_label">Path</string>
+    <string name="details_path_sample">/storage/emulated/0/Download</string>
+
+    <string name="zip_name_sample">Archive.zip</string>
+    <string name="zip_info_loading">Reading archive information...</string>
+    <string name="zip_included_files">Included files:</string>
+
+    <string name="item_filename_sample">file_name.jpg</string>
+    <string name="item_date_sample">2024.01.31</string>
+    <string name="zip_item_filename_sample">filename.txt</string>
+    <string name="zip_item_icon_content_description">File icon</string>
+    <string name="app_logo_content_description">App logo</string>
+
+    <string name="nav_header_title">Better Files</string>
+    <string name="nav_header_subtitle">My file manager</string>
 </resources>
