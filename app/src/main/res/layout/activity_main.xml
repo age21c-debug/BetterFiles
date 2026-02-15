@@ -7,17 +7,22 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <LinearLayout
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="20dp"
         android:background="#F8F9FA">
 
-        <androidx.cardview.widget.CardView
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_above="@id/layoutPasteBarMain"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="20dp">
+
+            <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="50dp"
             android:layout_marginTop="0dp"
@@ -330,7 +335,59 @@
                 </LinearLayout>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
-    </LinearLayout>
+
+        </LinearLayout>
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/layoutPasteBarMain"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_margin="16dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="8dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="16dp"
+                android:gravity="center_vertical"
+                android:background="#323232">
+
+                <TextView
+                    android:id="@+id/tvPasteInfoMain"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/paste_info_sample"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:layout_marginStart="8dp"/>
+
+                <Button
+                    android:id="@+id/btnCancelPasteMain"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/action_cancel"
+                    android:textColor="#FFFFFF"
+                    android:background="?attr/selectableItemBackground"
+                    style="?attr/borderlessButtonStyle"/>
+
+                <Button
+                    android:id="@+id/btnPasteMain"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/action_paste"
+                    android:textColor="#4FC3F7"
+                    android:textStyle="bold"
+                    android:background="?attr/selectableItemBackground"
+                    style="?attr/borderlessButtonStyle"/>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+    </RelativeLayout>
 
     <com.google.android.material.navigation.NavigationView
         android:id="@+id/navViewMain"

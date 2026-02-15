@@ -16,10 +16,12 @@ import android.media.ThumbnailUtils
 import android.view.MenuItem
 import android.view.View
 import android.webkit.MimeTypeMap
+import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.cardview.widget.CardView
 import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
 import androidx.core.view.GravityCompat
@@ -74,6 +76,8 @@ class MainActivity : AppCompatActivity() {
         val tvCategoryTitle: TextView = findViewById(R.id.tvCategoryTitle)
 
         setupRecentSection()
+        setupPasteEvents()
+        updatePasteBarUI()
 
         btnInternal.setOnClickListener {
             openActivity(
@@ -273,8 +277,54 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        updatePasteBarUI()
         updateHomeDrawerMenu()
         loadRecentFiles()
+    }
+
+    private fun setupPasteEvents() {
+        val btnCancelPaste: Button = findViewById(R.id.btnCancelPasteMain)
+        val btnPaste: Button = findViewById(R.id.btnPasteMain)
+
+        btnCancelPaste.setOnClickListener {
+            FileClipboard.clear()
+            updatePasteBarUI()
+        }
+
+        btnPaste.setOnClickListener {
+            if (!FileClipboard.hasClip()) return@setOnClickListener
+            val messageRes = if (FileClipboard.isMove) {
+                R.string.paste_unavailable_here_move
+            } else {
+                R.string.paste_unavailable_here_copy
+            }
+            Toast.makeText(this, getString(messageRes), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun updatePasteBarUI() {
+        val layoutPasteBar: CardView = findViewById(R.id.layoutPasteBarMain)
+        val btnPaste: Button = findViewById(R.id.btnPasteMain)
+        val tvPasteInfo: TextView = findViewById(R.id.tvPasteInfoMain)
+
+        val hasClip = FileClipboard.hasClip()
+        if (!hasClip) {
+            layoutPasteBar.visibility = View.GONE
+            return
+        }
+
+        layoutPasteBar.visibility = View.VISIBLE
+        val count = FileClipboard.files.size
+        val isMove = FileClipboard.isMove
+        if (isMove) {
+            tvPasteInfo.text = getString(R.string.paste_waiting_move_format, count)
+            btnPaste.text = getString(R.string.paste_here_move)
+        } else {
+            tvPasteInfo.text = getString(R.string.paste_waiting_copy_format, count)
+            btnPaste.text = getString(R.string.paste_here_copy)
+        }
+        btnPaste.isEnabled = true
+        btnPaste.alpha = 0.5f
     }
 
     private fun setupRecentSection() {
@@ -410,7 +460,12 @@ class MainActivity : AppCompatActivity() {
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
     }
 
-    private fun openActivity(mode: String, title: String, path: String = "", startSearch: Boolean = false) {
+    private fun openActivity(
+        mode: String,
+        title: String,
+        path: String = Environment.getExternalStorageDirectory().absolutePath,
+        startSearch: Boolean = false
+    ) {
         val intent = Intent(this, FileListActivity::class.java)
         intent.putExtra("mode", mode)
         intent.putExtra("title", title)

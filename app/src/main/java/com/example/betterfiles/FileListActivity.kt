@@ -76,6 +76,7 @@ class FileListActivity : AppCompatActivity() {
     private var currentMode: String = "folder"
     private lateinit var rootPath: String
     private lateinit var rootTitle: String
+    private var pasteTargetPath: String = ""
 
     // sort state
     private lateinit var prefs: SharedPreferences
@@ -99,12 +100,18 @@ class FileListActivity : AppCompatActivity() {
 
         val intentTitle = intent.getStringExtra("title") ?: getString(R.string.default_page_title)
         currentMode = intent.getStringExtra("mode") ?: "folder"
-        val intentPath = intent.getStringExtra("path") ?: Environment.getExternalStorageDirectory().absolutePath
+        val intentPathExtra = intent.getStringExtra("path")
+        val intentPath = if (intentPathExtra.isNullOrBlank()) {
+            Environment.getExternalStorageDirectory().absolutePath
+        } else {
+            intentPathExtra
+        }
         finishOnSearchBack = intent.getBooleanExtra("startSearch", false)
 
         rootTitle = intentTitle
         rootPath = intentPath
         currentPath = intentPath
+        pasteTargetPath = intentPath
 
         loadSavedSortSettings()
 
@@ -524,6 +531,21 @@ class FileListActivity : AppCompatActivity() {
         }
 
         btnPaste.setOnClickListener {
+            if (!FileClipboard.hasClip()) return@setOnClickListener
+            if (currentMode != "folder") {
+                val messageRes = if (FileClipboard.isMove) {
+                    R.string.paste_unavailable_here_move
+                } else {
+                    R.string.paste_unavailable_here_copy
+                }
+                Toast.makeText(this, getString(messageRes), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val sourceParentPath = FileClipboard.files.firstOrNull()?.parent
+            if (FileClipboard.isMove && sourceParentPath == pasteTargetPath) {
+                Toast.makeText(this, getString(R.string.paste_unavailable_here_move), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             performPaste()
         }
     }
@@ -553,11 +575,10 @@ class FileListActivity : AppCompatActivity() {
 
             val sourceParentPath = FileClipboard.files.firstOrNull()?.parent
 
-            if (isMove && sourceParentPath == currentPath) {
-                btnPaste.isEnabled = false
+            btnPaste.isEnabled = true
+            if (currentMode != "folder" || (isMove && sourceParentPath == pasteTargetPath)) {
                 btnPaste.alpha = 0.5f
             } else {
-                btnPaste.isEnabled = true
                 btnPaste.alpha = 1.0f
             }
 
@@ -567,7 +588,12 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun performPaste() {
-        val targetDir = File(currentPath)
+        if (currentMode != "folder") {
+            Toast.makeText(this, getString(R.string.folder_not_writable), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val targetDir = File(pasteTargetPath)
         if (!targetDir.canWrite()) {
             Toast.makeText(this, getString(R.string.folder_not_writable), Toast.LENGTH_SHORT).show()
             return
@@ -646,6 +672,12 @@ class FileListActivity : AppCompatActivity() {
         closeSelectionMode()
         updatePasteBarUI()
 
+        // In category/recent modes, switch to folder view so destination selection is explicit.
+        if (currentMode != "folder") {
+            rootTitle = getString(R.string.internal_storage)
+            loadData("folder", rootPath)
+        }
+
         val message = if (isMove) getString(R.string.clipboard_ready_move) else getString(R.string.clipboard_ready_copy)
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
@@ -674,7 +706,15 @@ class FileListActivity : AppCompatActivity() {
 
         val selectedItems = adapter.currentList.filter { it.isSelected }
         val detailsItem = popup.menu.findItem(R.id.action_selection_details)
+        val favoriteItem = popup.menu.findItem(R.id.action_selection_favorite)
+        val renameItem = popup.menu.findItem(R.id.action_selection_rename)
         detailsItem.isVisible = selectedItems.size == 1
+        favoriteItem.isVisible = selectedItems.size == 1
+        renameItem.isVisible = selectedItems.size == 1
+        if (selectedItems.size == 1) {
+            val isFav = FavoritesManager.isFavorite(this, selectedItems.first().path)
+            favoriteItem.title = if (isFav) getString(R.string.favorite_remove) else getString(R.string.menu_favorite_add)
+        }
 
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
@@ -688,6 +728,18 @@ class FileListActivity : AppCompatActivity() {
                 }
                 R.id.action_zip -> {
                     showZipDialog(selectedItems)
+                    true
+                }
+                R.id.action_selection_favorite -> {
+                    if (selectedItems.size == 1) {
+                        toggleFavorite(selectedItems.first())
+                    }
+                    true
+                }
+                R.id.action_selection_rename -> {
+                    if (selectedItems.size == 1) {
+                        showRenameDialog(selectedItems.first())
+                    }
                     true
                 }
                 R.id.action_selection_details -> {
@@ -1144,6 +1196,7 @@ class FileListActivity : AppCompatActivity() {
 
         currentMode = mode
         currentPath = path
+        pasteTargetPath = if (mode == "folder") path else rootPath
 
         val tvTitle = findViewById<TextView>(R.id.tvPageTitle)
         val btnNewFolder = findViewById<ImageView>(R.id.btnNewFolder)
@@ -1246,16 +1299,11 @@ class FileListActivity : AppCompatActivity() {
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.action_favorite -> {
-                    if (FavoritesManager.isFavorite(this, fileItem.path)) {
-                        FavoritesManager.remove(this, fileItem.path)
-                        Toast.makeText(this, getString(R.string.favorite_removed), Toast.LENGTH_SHORT).show()
-                    } else {
-                        FavoritesManager.add(this, fileItem.path)
-                        Toast.makeText(this, getString(R.string.favorite_added), Toast.LENGTH_SHORT).show()
-                    }
-                    updateDrawerMenu() // 硫붾돱 媛깆떊
+                    toggleFavorite(fileItem)
                     true
                 }
+                R.id.action_copy -> { copyOrMoveFileItem(fileItem, isMove = false); true }
+                R.id.action_move -> { copyOrMoveFileItem(fileItem, isMove = true); true }
                 R.id.action_share -> { shareFile(fileItem); true }
                 R.id.action_zip -> { showZipDialog(listOf(fileItem)); true }
                 R.id.action_rename -> { showRenameDialog(fileItem); true }
@@ -1265,6 +1313,29 @@ class FileListActivity : AppCompatActivity() {
             }
         }
         popup.show()
+    }
+
+    private fun toggleFavorite(fileItem: FileItem) {
+        if (FavoritesManager.isFavorite(this, fileItem.path)) {
+            FavoritesManager.remove(this, fileItem.path)
+            Toast.makeText(this, getString(R.string.favorite_removed), Toast.LENGTH_SHORT).show()
+        } else {
+            FavoritesManager.add(this, fileItem.path)
+            Toast.makeText(this, getString(R.string.favorite_added), Toast.LENGTH_SHORT).show()
+        }
+        updateDrawerMenu()
+    }
+
+    private fun copyOrMoveFileItem(fileItem: FileItem, isMove: Boolean) {
+        FileClipboard.files = listOf(File(fileItem.path))
+        FileClipboard.isMove = isMove
+        updatePasteBarUI()
+        if (currentMode != "folder") {
+            rootTitle = getString(R.string.internal_storage)
+            loadData("folder", rootPath)
+        }
+        val message = if (isMove) getString(R.string.clipboard_ready_move) else getString(R.string.clipboard_ready_copy)
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     private fun showFileDetailsDialog(fileItem: FileItem) {

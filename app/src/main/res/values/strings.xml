@@ -137,6 +137,8 @@
     <string name="paste_result_copy">copied</string>
     <string name="paste_result_format">%1$d items %2$s.</string>
     <string name="operation_failed">Operation failed.</string>
+    <string name="paste_unavailable_here_copy">You cannot paste on this screen.</string>
+    <string name="paste_unavailable_here_move">You cannot move items to this screen.</string>
     <string name="clipboard_ready_move">Move selected. Tap "Move here" in destination.</string>
     <string name="clipboard_ready_copy">Copy selected. Tap "Copy here" in destination.</string>
     <string name="zip_success_format">Compressed: %1$s</string>
