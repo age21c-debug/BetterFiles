@@ -1,37 +1,40 @@
 package com.example.betterfiles
 
+import android.graphics.Bitmap
 import android.graphics.Color
+import android.text.format.DateUtils
 import android.text.format.Formatter
+import android.util.LruCache
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 class FileAdapter(
-    private val onClick: (FileItem) -> Unit,           // 파일 클릭 시 (열기)
-    private val onMoreClick: (View, FileItem) -> Unit, // 더보기 버튼 클릭 시
-    private val onLongClick: (FileItem) -> Unit,       // 롱클릭 시 (선택 모드 진입)
-    private val onSelectionChanged: () -> Unit         // 선택 상태 변경 알림
+    private val onClick: (FileItem) -> Unit,
+    private val onMoreClick: (View, FileItem) -> Unit,
+    private val onLongClick: (FileItem) -> Unit,
+    private val onSelectionChanged: () -> Unit
 ) : RecyclerView.Adapter<FileAdapter.FileViewHolder>() {
 
     private var files: List<FileItem> = emptyList()
+    private val pdfThumbCache = LruCache<String, Bitmap>(48)
 
-    // 선택 모드 상태 변수
     var isSelectionMode = false
-
-    // 복사/이동(붙여넣기 대기) 모드 상태 변수
     var isPasteMode = false
+    var showDateHeaders = false
 
-    // 외부에서 현재 리스트에 접근할 수 있도록 프로퍼티 추가
     val currentList: List<FileItem>
         get() = files
 
@@ -46,7 +49,7 @@ class FileAdapter(
     }
 
     override fun onBindViewHolder(holder: FileViewHolder, position: Int) {
-        holder.bind(files[position])
+        holder.bind(files[position], position)
     }
 
     override fun getItemCount() = files.size
@@ -54,95 +57,35 @@ class FileAdapter(
     inner class FileViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val tvName: TextView = itemView.findViewById(R.id.tvName)
         private val tvSize: TextView = itemView.findViewById(R.id.tvSize)
+        private val tvDateHeader: TextView = itemView.findViewById(R.id.tvDateHeader)
+        private val layoutRowContent: LinearLayout = itemView.findViewById(R.id.layoutRowContent)
         private val ivIcon: ImageView = itemView.findViewById(R.id.ivIcon)
         private val btnMore: ImageView = itemView.findViewById(R.id.btnMore)
         private val cbSelect: CheckBox = itemView.findViewById(R.id.cbSelect)
 
-        // 배경 리소스 ID를 안전하게 미리 가져옴 (물결 효과)
         private val rippleResId: Int = with(TypedValue()) {
             itemView.context.theme.resolveAttribute(android.R.attr.selectableItemBackground, this, true)
             resourceId
         }
 
-        fun bind(item: FileItem) {
+        fun bind(item: FileItem, position: Int) {
             val file = File(item.path)
             tvName.text = item.name
+            bindDateHeader(item, position)
 
-            // 1. 아이콘 상태 초기화
             Glide.with(itemView.context).clear(ivIcon)
             ivIcon.clearColorFilter()
             ivIcon.setImageDrawable(null)
 
-            // ------------------------------------------------------------
-            // 기존 아이콘 결정 로직
-            // ------------------------------------------------------------
-            if (item.isDirectory) {
-                ivIcon.setImageResource(R.drawable.ic_folder_solid)
-            } else {
-                if (isImageFile(item.name) || isVideoFile(item.name)) {
-                    Glide.with(itemView.context)
-                        .load(file)
-                        .centerCrop()
-                        .placeholder(R.drawable.ic_file)
-                        .into(ivIcon)
-                    ivIcon.clearColorFilter()
+            FileVisualRules.bindThumbnail(
+                context = itemView.context,
+                target = ivIcon,
+                fileItem = item,
+                file = file,
+                pdfCache = pdfThumbCache,
+                pdfThumbWidth = 180
+            )
 
-                } else if (isApkFile(item.name)) {
-                    val pm = itemView.context.packageManager
-                    val packageInfo = pm.getPackageArchiveInfo(item.path, 0)
-
-                    if (packageInfo != null) {
-                        packageInfo.applicationInfo.sourceDir = item.path
-                        packageInfo.applicationInfo.publicSourceDir = item.path
-                        val apkIcon = packageInfo.applicationInfo.loadIcon(pm)
-
-                        Glide.with(itemView.context)
-                            .load(apkIcon)
-                            .centerCrop()
-                            .placeholder(R.drawable.ic_android)
-                            .into(ivIcon)
-                        ivIcon.clearColorFilter()
-                    } else {
-                        ivIcon.setImageResource(R.drawable.ic_android)
-                        ivIcon.setColorFilter(Color.parseColor("#3DDC84"))
-                    }
-
-                } else if (isPdfFile(item.name)) {
-                    ivIcon.setImageResource(R.drawable.ic_pdf)
-                    // 리소스 없을 경우 대비
-                    if (itemView.resources.getIdentifier("ic_pdf", "drawable", itemView.context.packageName) == 0) {
-                        ivIcon.setImageResource(R.drawable.ic_file)
-                    }
-                    ivIcon.setColorFilter(Color.parseColor("#F44336"))
-
-                } else if (isVoiceFile(item.name)) {
-                    ivIcon.setImageResource(R.drawable.ic_mic)
-                    if (itemView.resources.getIdentifier("ic_mic", "drawable", itemView.context.packageName) == 0) {
-                        ivIcon.setImageResource(R.drawable.ic_file)
-                    }
-                    ivIcon.setColorFilter(Color.parseColor("#009688"))
-
-                } else if (isAudioFile(item.name)) {
-                    ivIcon.setImageResource(R.drawable.ic_music_note)
-                    if (itemView.resources.getIdentifier("ic_music_note", "drawable", itemView.context.packageName) == 0) {
-                        ivIcon.setImageResource(R.drawable.ic_file)
-                    }
-                    ivIcon.setColorFilter(Color.parseColor("#9C27B0"))
-
-                } else if (isZipFile(item.name)) {
-                    // [추가됨] 압축 파일 아이콘 처리
-                    ivIcon.setImageResource(R.drawable.ic_zip)
-                    ivIcon.setColorFilter(Color.parseColor("#FFC107")) // Amber (Yellow)
-
-                } else {
-                    ivIcon.setImageResource(R.drawable.ic_file)
-                    ivIcon.setColorFilter(Color.parseColor("#5F6368"))
-                }
-            }
-
-            // ------------------------------------------------------------
-            // 텍스트 설정
-            // ------------------------------------------------------------
             val dateStr = getFormattedDate(file.lastModified())
             if (item.isDirectory) {
                 tvSize.text = dateStr
@@ -151,37 +94,22 @@ class FileAdapter(
                 tvSize.text = "$sizeStr • $dateStr"
             }
 
-            // ------------------------------------------------------------
-            // UI 상태 제어 (선택 모드 & 붙여넣기 모드)
-            // ------------------------------------------------------------
             if (isSelectionMode) {
-                // 선택 모드: 더보기 숨김, 체크박스 표시
                 btnMore.visibility = View.GONE
                 cbSelect.visibility = View.VISIBLE
                 cbSelect.isChecked = item.isSelected
-
                 if (item.isSelected) {
-                    itemView.setBackgroundColor(Color.parseColor("#E3F2FD")) // 선택됨: 파란색
+                    layoutRowContent.setBackgroundColor(Color.parseColor("#E3F2FD"))
                 } else {
-                    itemView.setBackgroundResource(rippleResId) // 선택안됨: 기본
+                    layoutRowContent.setBackgroundResource(rippleResId)
                 }
             } else {
-                // 일반 모드
                 cbSelect.visibility = View.GONE
                 cbSelect.isChecked = false
-                itemView.setBackgroundResource(rippleResId)
-
-                // 붙여넣기 모드(isPasteMode)일 때는 더보기 버튼 숨김
-                if (isPasteMode) {
-                    btnMore.visibility = View.GONE
-                } else {
-                    btnMore.visibility = View.VISIBLE
-                }
+                layoutRowContent.setBackgroundResource(rippleResId)
+                btnMore.visibility = if (isPasteMode) View.GONE else View.VISIBLE
             }
 
-            // ------------------------------------------------------------
-            // 클릭 이벤트 설정
-            // ------------------------------------------------------------
             itemView.setOnClickListener {
                 if (isSelectionMode) {
                     item.isSelected = !item.isSelected
@@ -193,62 +121,59 @@ class FileAdapter(
             }
 
             itemView.setOnLongClickListener {
-                // 선택 모드가 아닐 때만 롱클릭 허용 (Activity에서 추가 제어하지만 여기서도 체크)
                 if (!isSelectionMode) {
                     onLongClick(item)
-                    return@setOnLongClickListener true
+                    true
+                } else {
+                    false
                 }
-                false
             }
 
-            btnMore.setOnClickListener { view ->
-                onMoreClick(view, item)
-            }
-        }
-
-        // --- 확장자 판별 헬퍼 함수들 ---
-        private fun isImageFile(name: String): Boolean {
-            val lower = name.lowercase()
-            return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") ||
-                    lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".bmp")
-        }
-
-        private fun isVideoFile(name: String): Boolean {
-            val lower = name.lowercase()
-            return lower.endsWith(".mp4") || lower.endsWith(".mkv") || lower.endsWith(".avi") ||
-                    lower.endsWith(".mov") || lower.endsWith(".wmv") || lower.endsWith(".webm") ||
-                    lower.endsWith(".3gp")
-        }
-
-        private fun isApkFile(name: String): Boolean {
-            return name.lowercase().endsWith(".apk")
-        }
-
-        private fun isVoiceFile(name: String): Boolean {
-            return name.lowercase().endsWith(".m4a")
-        }
-
-        private fun isAudioFile(name: String): Boolean {
-            val lower = name.lowercase()
-            return lower.endsWith(".mp3") || lower.endsWith(".wav") || lower.endsWith(".ogg") ||
-                    lower.endsWith(".flac") || lower.endsWith(".aac") || lower.endsWith(".wma")
-        }
-
-        private fun isPdfFile(name: String): Boolean {
-            return name.lowercase().endsWith(".pdf")
-        }
-
-        // [추가됨] 압축 파일 판별 함수
-        private fun isZipFile(name: String): Boolean {
-            val lower = name.lowercase()
-            return lower.endsWith(".zip") || lower.endsWith(".rar") || lower.endsWith(".7z") ||
-                    lower.endsWith(".tar") || lower.endsWith(".gz")
+            btnMore.setOnClickListener { view -> onMoreClick(view, item) }
         }
 
         private fun getFormattedDate(time: Long): String {
             val date = Date(time)
             val format = SimpleDateFormat("yyyy.MM.dd", Locale.getDefault())
             return format.format(date)
+        }
+
+        private fun bindDateHeader(item: FileItem, position: Int) {
+            if (!showDateHeaders) {
+                tvDateHeader.visibility = View.GONE
+                return
+            }
+
+            val currentMillis = item.dateModified * 1000
+            val shouldShow = if (position == 0) {
+                true
+            } else {
+                val prevMillis = files[position - 1].dateModified * 1000
+                !isSameDay(currentMillis, prevMillis)
+            }
+
+            if (shouldShow) {
+                tvDateHeader.visibility = View.VISIBLE
+                tvDateHeader.text = formatHeaderDate(currentMillis)
+            } else {
+                tvDateHeader.visibility = View.GONE
+            }
+        }
+
+        private fun formatHeaderDate(timeMillis: Long): String {
+            val context = itemView.context
+            return when {
+                DateUtils.isToday(timeMillis) -> context.getString(R.string.date_header_today)
+                DateUtils.isToday(timeMillis + DateUtils.DAY_IN_MILLIS) -> context.getString(R.string.date_header_yesterday)
+                else -> getFormattedDate(timeMillis)
+            }
+        }
+
+        private fun isSameDay(aMillis: Long, bMillis: Long): Boolean {
+            val calA = Calendar.getInstance().apply { timeInMillis = aMillis }
+            val calB = Calendar.getInstance().apply { timeInMillis = bMillis }
+            return calA.get(Calendar.YEAR) == calB.get(Calendar.YEAR) &&
+                calA.get(Calendar.DAY_OF_YEAR) == calB.get(Calendar.DAY_OF_YEAR)
         }
     }
 }

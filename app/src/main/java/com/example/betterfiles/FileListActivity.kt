@@ -1,4 +1,4 @@
-package com.example.betterfiles
+﻿package com.example.betterfiles
 
 import android.app.AlertDialog
 import android.content.Context
@@ -7,7 +7,7 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.media.MediaScannerConnection // [복구됨] 이 줄이 빠져서 에러가 났습니다
+import android.media.MediaScannerConnection // [蹂듦뎄?? ??以꾩씠 鍮좎졇???먮윭媛 ?ъ뒿?덈떎
 import android.media.ThumbnailUtils
 import android.net.Uri
 import android.os.Build
@@ -50,35 +50,39 @@ import java.util.Date
 import java.util.Locale
 
 class FileListActivity : AppCompatActivity() {
+    companion object {
+        private const val RECENT_INITIAL_BATCH = 120
+    }
 
     private lateinit var adapter: FileAdapter
     private lateinit var repository: FileRepository
 
-    // 드로어(사이드 메뉴) 관련 변수
+    // drawer/navigation
     private lateinit var drawerLayout: DrawerLayout
     private lateinit var navView: NavigationView
 
-    // 데이터 로딩 작업 관리
+    // async jobs
     private var loadJob: Job? = null
 
-    // 검색 작업 관리
     private var searchJob: Job? = null
     private var isSearchMode: Boolean = false
     private var currentSearchQuery: String = ""
 
-    // 선택 모드 관리 변수
+    // selection mode
     private var isSelectionMode: Boolean = false
 
-    // 네비게이션 변수
+    // navigation state
     private var currentPath: String = ""
     private var currentMode: String = "folder"
     private lateinit var rootPath: String
     private lateinit var rootTitle: String
 
-    // 정렬 설정 변수
+    // sort state
     private lateinit var prefs: SharedPreferences
     private var currentSortMode = "name"
     private var isAscending = true
+    private var lastRecentSearchQueryForSortReset: String? = null
+    private var isRecentCountLoading: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,13 +91,12 @@ class FileListActivity : AppCompatActivity() {
         repository = FileRepository(this)
         prefs = getSharedPreferences("BetterFilesPrefs", Context.MODE_PRIVATE)
 
-        // 1. 뷰 초기화
         drawerLayout = findViewById(R.id.drawerLayout)
         navView = findViewById(R.id.navView)
         val rvFiles: RecyclerView = findViewById(R.id.rvFiles)
         val btnBack: ImageView = findViewById(R.id.btnBack)
 
-        val intentTitle = intent.getStringExtra("title") ?: "파일"
+        val intentTitle = intent.getStringExtra("title") ?: getString(R.string.default_page_title)
         currentMode = intent.getStringExtra("mode") ?: "folder"
         val intentPath = intent.getStringExtra("path") ?: Environment.getExternalStorageDirectory().absolutePath
 
@@ -103,7 +106,7 @@ class FileListActivity : AppCompatActivity() {
 
         loadSavedSortSettings()
 
-        // 2. 어댑터 설정
+        // 2. ?대뙌???ㅼ젙
         adapter = FileAdapter(
             onClick = { fileItem ->
                 if (fileItem.isDirectory) {
@@ -130,10 +133,10 @@ class FileListActivity : AppCompatActivity() {
         rvFiles.layoutManager = LinearLayoutManager(this)
         rvFiles.adapter = adapter
 
-        // 3. 드로어 설정
+        // 3. ?쒕줈???ㅼ젙
         setupDrawer()
 
-        // 4. 이벤트 설정
+        // 4. ?대깽???ㅼ젙
         btnBack.setOnClickListener { handleHeaderNavigationClick() }
         setupHeaderEvents()
         setupSelectionEvents()
@@ -156,15 +159,14 @@ class FileListActivity : AppCompatActivity() {
         loadData(currentMode, rootPath)
     }
 
-    // ▼▼▼ 드로어(즐겨찾기) 관련 로직 ▼▼▼
-
+    // ?쇄뼹???쒕줈??利먭꺼李얘린) 愿??濡쒖쭅 ?쇄뼹??
     private fun setupDrawer() {
-        // 1. 기본 틴트(색상 덮어쓰기) 제거 -> 우리가 원하는 색(노란색, 썸네일 등)을 표시하기 위함
+        // 1. 湲곕낯 ?댄듃(?됱긽 ??뼱?곌린) ?쒓굅 -> ?곕━媛 ?먰븯?????몃??? ?몃꽕???????쒖떆?섍린 ?꾪븿
         navView.itemIconTintList = null
 
-        // 2. 상단 고정 메뉴(내장 메모리, 다운로드) 아이콘을 회색으로 수동 설정
+        // 2. ?곷떒 怨좎젙 硫붾돱(?댁옣 硫붾え由? ?ㅼ슫濡쒕뱶) ?꾩씠肄섏쓣 ?뚯깋?쇰줈 ?섎룞 ?ㅼ젙
         val menu = navView.menu
-        val greyColor = Color.parseColor("#757575") // 기본 회색
+        val greyColor = Color.parseColor("#757575") // 湲곕낯 ?뚯깋
 
         val internalItem = menu.findItem(R.id.nav_internal_storage)
         internalItem?.icon?.mutate()?.setTint(greyColor)
@@ -172,15 +174,23 @@ class FileListActivity : AppCompatActivity() {
         val downloadItem = menu.findItem(R.id.nav_download)
         downloadItem?.icon?.mutate()?.setTint(greyColor)
 
-        // 3. 클릭 리스너 (기존 코드와 동일)
+        val recentItem = menu.findItem(R.id.nav_recent)
+        recentItem?.icon?.mutate()?.setTint(greyColor)
+
+        // 3. ?대┃ 由ъ뒪??(湲곗〈 肄붾뱶? ?숈씪)
         navView.setNavigationItemSelectedListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.nav_internal_storage -> {
+                    rootTitle = getString(R.string.internal_storage)
                     loadData("folder", rootPath)
                 }
                 R.id.nav_download -> {
                     val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
                     loadData("folder", downloadPath)
+                }
+                R.id.nav_recent -> {
+                    rootTitle = getString(R.string.recent_files)
+                    loadData("recent", rootPath)
                 }
             }
             drawerLayout.closeDrawer(GravityCompat.START)
@@ -197,7 +207,7 @@ class FileListActivity : AppCompatActivity() {
         val favorites = FavoritesManager.getAll(this)
 
         if (favorites.isEmpty()) {
-            val item = favoritesGroup.add(0, 0, 0, "(즐겨찾기 없음)")
+            val item = favoritesGroup.add(0, 0, 0, getString(R.string.favorites_empty))
             item.isEnabled = false
         } else {
             favorites.forEachIndexed { index, path ->
@@ -205,9 +215,9 @@ class FileListActivity : AppCompatActivity() {
                 val item = favoritesGroup.add(0, index + 100, 0, file.name)
 
                 if (file.isDirectory) {
-                    // [수정됨] 폴더: 파란색 -> 노란색 (#FFC107) 변경
+                    // Folder favorite icon tint
                     val drawable = getDrawable(R.drawable.ic_folder_solid)?.mutate()
-                    drawable?.setTint(Color.parseColor("#FFC107")) // 노란색 적용
+                    drawable?.setTint(Color.parseColor("#FFC107")) // ?몃????곸슜
                     item.icon = drawable
 
                     item.setOnMenuItemClickListener {
@@ -216,20 +226,20 @@ class FileListActivity : AppCompatActivity() {
                         true
                     }
                 } else {
-                    // [파일] 우선 기본 아이콘 및 색상 설정
+                    // [?뚯씪] ?곗꽑 湲곕낯 ?꾩씠肄?諛??됱긽 ?ㅼ젙
                     val iconRes = getFileIconResource(file.name)
                     val iconColor = getFileIconColor(file.name) ?: Color.GRAY
                     val drawable = getDrawable(iconRes)?.mutate()
                     drawable?.setTint(iconColor)
                     item.icon = drawable
 
-                    // [추가됨] 썸네일: 이미지/비디오는 비동기로 로딩하여 아이콘 교체
+                    // [異붽??? ?몃꽕?? ?대?吏/鍮꾨뵒?ㅻ뒗 鍮꾨룞湲곕줈 濡쒕뵫?섏뿬 ?꾩씠肄?援먯껜
                     if (isImageFile(file.name) || isVideoFile(file.name)) {
                         lifecycleScope.launch(Dispatchers.IO) {
-                            val thumbnail = loadThumbnail(file) // 아래에 추가할 함수 호출
+                            val thumbnail = loadThumbnail(file) // ?꾨옒??異붽????⑥닔 ?몄텧
                             if (thumbnail != null) {
                                 withContext(Dispatchers.Main) {
-                                    // 둥근 모서리 썸네일 생성
+                                    // ?κ렐 紐⑥꽌由??몃꽕???앹꽦
                                     val roundedDrawable = RoundedBitmapDrawableFactory.create(resources, thumbnail)
                                     roundedDrawable.cornerRadius = 16f
                                     item.icon = roundedDrawable
@@ -248,15 +258,15 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // [추가] 썸네일 로딩 함수
-    // [추가] 썸네일 로딩 헬퍼 함수
+    // [異붽?] ?몃꽕??濡쒕뵫 ?⑥닔
+    // [異붽?] ?몃꽕??濡쒕뵫 ?ы띁 ?⑥닔
     private fun loadThumbnail(file: File): Bitmap? {
         return try {
-            val size = Size(144, 144) // 메뉴 아이콘에 적당한 크기
+            val size = Size(144, 144) // 硫붾돱 ?꾩씠肄섏뿉 ?곷떦???ш린
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ThumbnailUtils.createImageThumbnail(file, size, null)
             } else {
-                // 구버전 호환 (간단한 비트맵 디코딩)
+                // 援щ쾭???명솚 (媛꾨떒??鍮꾪듃留??붿퐫??
                 val options = BitmapFactory.Options().apply { inSampleSize = 4 }
                 if (isVideoFile(file.name)) {
                     ThumbnailUtils.createVideoThumbnail(file.absolutePath, android.provider.MediaStore.Video.Thumbnails.MINI_KIND)
@@ -285,8 +295,7 @@ class FileListActivity : AppCompatActivity() {
             btnBack.setImageResource(R.drawable.ic_arrow_back)
         }
     }
-    // ▲▲▲ 드로어 로직 끝 ▲▲▲
-
+    // ?꿎뼯???쒕줈??濡쒖쭅 ???꿎뼯??
 
     private fun handleFileClick(fileItem: FileItem) {
         val file = File(fileItem.path)
@@ -297,7 +306,7 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // [함수 1] 메인 리스트에서 클릭 시 (FileItem 사용)
+    // [?⑥닔 1] 硫붿씤 由ъ뒪?몄뿉???대┃ ??(FileItem ?ъ슜)
     private fun openFile(fileItem: FileItem) {
         try {
             val file = File(fileItem.path)
@@ -308,11 +317,11 @@ class FileListActivity : AppCompatActivity() {
             }
             startActivity(intent)
         } catch (e: Exception) {
-            Toast.makeText(this, "이 파일을 열 수 있는 앱이 없습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_no_app_to_open), Toast.LENGTH_SHORT).show()
         }
     }
 
-    // [함수 2] 즐겨찾기 등에서 파일 경로만으로 실행 (File 사용)
+    // [?⑥닔 2] 利먭꺼李얘린 ?깆뿉???뚯씪 寃쎈줈留뚯쑝濡??ㅽ뻾 (File ?ъ슜)
     private fun openFile(file: File) {
         try {
             val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
@@ -324,11 +333,11 @@ class FileListActivity : AppCompatActivity() {
             }
             startActivity(intent)
         } catch (e: Exception) {
-            Toast.makeText(this, "이 파일을 열 수 있는 앱이 없습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_no_app_to_open), Toast.LENGTH_SHORT).show()
         }
     }
 
-    // [필수] 파일 확장자로 MIME Type 찾기
+    // [?꾩닔] ?뚯씪 ?뺤옣?먮줈 MIME Type 李얘린
     private fun getMimeType(file: File): String {
         val extension = file.extension.lowercase(Locale.getDefault())
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
@@ -341,15 +350,15 @@ class FileListActivity : AppCompatActivity() {
         val container: LinearLayout = view.findViewById(R.id.layoutZipContentContainer)
 
         tvName.text = zipFile.name
-        tvSummary.text = "정보 읽는 중..."
+        tvSummary.text = getString(R.string.zip_info_loading)
 
         val dialog = AlertDialog.Builder(this)
-            .setTitle("압축 해제")
+            .setTitle(getString(R.string.unzip_title))
             .setView(view)
-            .setPositiveButton("해제") { _, _ ->
+            .setPositiveButton(getString(R.string.unzip_action)) { _, _ ->
                 performUnzip(zipFile)
             }
-            .setNegativeButton("취소", null)
+            .setNegativeButton(getString(R.string.action_cancel), null)
             .show()
 
         lifecycleScope.launch(Dispatchers.IO) {
@@ -358,7 +367,7 @@ class FileListActivity : AppCompatActivity() {
 
                 withContext(Dispatchers.Main) {
                     val sizeStr = Formatter.formatFileSize(this@FileListActivity, info.totalSize)
-                    tvSummary.text = "총 ${info.fileCount}개 파일 • 해제 시 약 $sizeStr"
+                    tvSummary.text = getString(R.string.zip_summary_format, info.fileCount, sizeStr)
 
                     container.removeAllViews()
                     val inflater = LayoutInflater.from(this@FileListActivity)
@@ -385,13 +394,13 @@ class FileListActivity : AppCompatActivity() {
 
                     if (info.fileCount > 10) {
                         val moreView = TextView(this@FileListActivity)
-                        moreView.text = "...외 ${info.fileCount - 10}개 항목"
+                        moreView.text = getString(R.string.zip_more_items_format, info.fileCount - 10)
                         moreView.setPadding(8, 16, 8, 8)
                         moreView.setTextColor(getColor(android.R.color.darker_gray))
                         container.addView(moreView)
                     } else if (info.fileCount == 0) {
                         val emptyView = TextView(this@FileListActivity)
-                        emptyView.text = "내용 없음"
+                        emptyView.text = getString(R.string.zip_content_empty)
                         emptyView.setPadding(8, 16, 8, 8)
                         container.addView(emptyView)
                     }
@@ -399,7 +408,7 @@ class FileListActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    tvSummary.text = "정보를 읽을 수 없습니다."
+                    tvSummary.text = getString(R.string.zip_info_failed)
                     val errorView = TextView(this@FileListActivity)
                     errorView.text = "Error: ${e.message}"
                     container.addView(errorView)
@@ -409,35 +418,13 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun getFileIconResource(fileName: String): Int {
-        if (fileName.endsWith("/")) return R.drawable.ic_folder_solid
-
-        val lower = fileName.lowercase(Locale.getDefault())
-        return when {
-            isImageFile(lower) -> R.drawable.ic_image_file
-            isApkFile(lower) -> R.drawable.ic_android_file
-            isVideoFile(lower) -> R.drawable.ic_video
-            isPdfFile(lower) -> R.drawable.ic_pdf
-            isVoiceFile(lower) -> R.drawable.ic_mic
-            isAudioFile(lower) -> R.drawable.ic_music_note
-            isZipFile(lower) -> R.drawable.ic_zip
-            else -> R.drawable.ic_file
-        }
+        val type = FileVisualRules.resolveType(fileName, isDirectory = fileName.endsWith("/"))
+        return FileVisualRules.typeIconRes(type)
     }
 
     private fun getFileIconColor(fileName: String): Int? {
-        if (fileName.endsWith("/")) return null
-
-        val lower = fileName.lowercase(Locale.getDefault())
-        return when {
-            isImageFile(lower) -> Color.parseColor("#FFA000")
-            isApkFile(lower) -> Color.parseColor("#3DDC84")
-            isVideoFile(lower) -> Color.parseColor("#1565C0")
-            isPdfFile(lower) -> Color.parseColor("#F44336")
-            isVoiceFile(lower) -> Color.parseColor("#009688")
-            isAudioFile(lower) -> Color.parseColor("#9C27B0")
-            isZipFile(lower) -> Color.parseColor("#FFC107")
-            else -> Color.parseColor("#5F6368")
-        }
+        val type = FileVisualRules.resolveType(fileName, isDirectory = fileName.endsWith("/"))
+        return FileVisualRules.typeIconColor(type)
     }
 
     private fun isImageFile(name: String): Boolean {
@@ -478,14 +465,14 @@ class FileListActivity : AppCompatActivity() {
                 ZipManager.unzip(zipFile, extractDir)
 
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@FileListActivity, "압축 해제 완료", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@FileListActivity, getString(R.string.unzip_success), Toast.LENGTH_SHORT).show()
                     MediaScannerConnection.scanFile(this@FileListActivity, arrayOf(extractDir.absolutePath), null, null)
                     loadData(currentMode, currentPath)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@FileListActivity, "압축 해제 실패: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@FileListActivity, getString(R.string.unzip_failed_format, e.message ?: ""), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -521,11 +508,11 @@ class FileListActivity : AppCompatActivity() {
             val isMove = FileClipboard.isMove
 
             if (isMove) {
-                tvPasteInfo.text = "$count 개 항목 이동 대기 중..."
-                btnPaste.text = "여기로 이동"
+                tvPasteInfo.text = getString(R.string.paste_waiting_move_format, count)
+                btnPaste.text = getString(R.string.paste_here_move)
             } else {
-                tvPasteInfo.text = "$count 개 항목 복사 대기 중..."
-                btnPaste.text = "여기에 복사"
+                tvPasteInfo.text = getString(R.string.paste_waiting_copy_format, count)
+                btnPaste.text = getString(R.string.paste_here_copy)
             }
 
             val sourceParentPath = FileClipboard.files.firstOrNull()?.parent
@@ -546,7 +533,7 @@ class FileListActivity : AppCompatActivity() {
     private fun performPaste() {
         val targetDir = File(currentPath)
         if (!targetDir.canWrite()) {
-            Toast.makeText(this, "이 폴더에는 쓸 수 없습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.folder_not_writable), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -579,14 +566,14 @@ class FileListActivity : AppCompatActivity() {
 
             withContext(Dispatchers.Main) {
                 if (successCount > 0) {
-                    val msg = if (FileClipboard.isMove) "이동 완료" else "복사 완료"
-                    Toast.makeText(this@FileListActivity, "$successCount 개 $msg", Toast.LENGTH_SHORT).show()
+                    val actionText = if (FileClipboard.isMove) getString(R.string.paste_result_move) else getString(R.string.paste_result_copy)
+                    Toast.makeText(this@FileListActivity, getString(R.string.paste_result_format, successCount, actionText), Toast.LENGTH_SHORT).show()
                     MediaScannerConnection.scanFile(this@FileListActivity, pathsToScan.toTypedArray(), null, null)
                     FileClipboard.clear()
                     updatePasteBarUI()
                     loadData(currentMode, currentPath)
                 } else {
-                    Toast.makeText(this@FileListActivity, "작업에 실패했습니다.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@FileListActivity, getString(R.string.operation_failed), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -623,8 +610,8 @@ class FileListActivity : AppCompatActivity() {
         closeSelectionMode()
         updatePasteBarUI()
 
-        val action = if (isMove) "이동" else "복사"
-        Toast.makeText(this, "$action 할 위치로 가서 '$action' 버튼을 누르세요.", Toast.LENGTH_SHORT).show()
+        val message = if (isMove) getString(R.string.clipboard_ready_move) else getString(R.string.clipboard_ready_copy)
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     private fun setupSelectionEvents() {
@@ -686,7 +673,7 @@ class FileListActivity : AppCompatActivity() {
         val defaultName = if (selectedItems.size == 1) {
             File(selectedItems.first().path).nameWithoutExtension
         } else {
-            File(currentPath).name // 현재 폴더 이름
+            File(currentPath).name // ?꾩옱 ?대뜑 ?대쫫
         }
         editText.setText(defaultName)
         editText.selectAll()
@@ -701,16 +688,16 @@ class FileListActivity : AppCompatActivity() {
         container.addView(editText)
 
         AlertDialog.Builder(this)
-            .setTitle("압축하기")
-            .setMessage("${selectedItems.size}개 항목을 압축합니다.")
+            .setTitle(getString(R.string.zip_dialog_title))
+            .setMessage(getString(R.string.zip_dialog_message_format, selectedItems.size))
             .setView(container)
-            .setPositiveButton("압축") { _, _ ->
+            .setPositiveButton(getString(R.string.menu_zip)) { _, _ ->
                 val name = editText.text.toString().trim()
                 if (name.isNotEmpty()) {
                     performZip(selectedItems, name)
                 }
             }
-            .setNegativeButton("취소", null)
+            .setNegativeButton(getString(R.string.action_cancel), null)
             .show()
     }
 
@@ -726,7 +713,7 @@ class FileListActivity : AppCompatActivity() {
                 ZipManager.zip(filesToZip, zipFile)
 
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@FileListActivity, "압축 완료: ${zipFile.name}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@FileListActivity, getString(R.string.zip_success_format, zipFile.name), Toast.LENGTH_SHORT).show()
                     MediaScannerConnection.scanFile(this@FileListActivity, arrayOf(zipFile.absolutePath), null, null)
 
                     closeSelectionMode()
@@ -735,7 +722,7 @@ class FileListActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(this@FileListActivity, "압축 실패: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@FileListActivity, getString(R.string.zip_failed_format, e.message ?: ""), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -782,7 +769,7 @@ class FileListActivity : AppCompatActivity() {
     private fun updateSelectionUI() {
         val count = adapter.currentList.count { it.isSelected }
         val tvSelectionCount: TextView = findViewById(R.id.tvSelectionCount)
-        tvSelectionCount.text = "${count}개 선택됨"
+        tvSelectionCount.text = getString(R.string.selection_count_format, count)
     }
 
     private fun showDeleteSelectionDialog() {
@@ -790,10 +777,10 @@ class FileListActivity : AppCompatActivity() {
         if (selectedItems.isEmpty()) return
 
         AlertDialog.Builder(this)
-            .setTitle("파일 삭제")
-            .setMessage("${selectedItems.size}개의 항목을 삭제하시겠습니까?")
-            .setPositiveButton("삭제") { _, _ -> deleteSelectedFiles(selectedItems) }
-            .setNegativeButton("취소", null)
+            .setTitle(getString(R.string.menu_delete))
+            .setMessage(getString(R.string.confirm_delete_selected_message, selectedItems.size))
+            .setPositiveButton(getString(R.string.menu_delete)) { _, _ -> deleteSelectedFiles(selectedItems) }
+            .setNegativeButton(getString(R.string.action_cancel), null)
             .show()
     }
 
@@ -814,12 +801,12 @@ class FileListActivity : AppCompatActivity() {
         }
 
         if (deletedCount > 0) {
-            Toast.makeText(this, "${deletedCount}개 삭제되었습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.deleted_count_format, deletedCount), Toast.LENGTH_SHORT).show()
             MediaScannerConnection.scanFile(this, pathsToScan.toTypedArray(), null, null)
             closeSelectionMode()
             loadData(currentMode, currentPath)
         } else {
-            Toast.makeText(this, "삭제 실패. 권한을 확인하세요.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_delete_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -845,14 +832,20 @@ class FileListActivity : AppCompatActivity() {
                 putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            startActivity(Intent.createChooser(intent, "파일 공유"))
+            startActivity(Intent.createChooser(intent, getString(R.string.menu_share)))
         } catch (e: Exception) {
-            Toast.makeText(this, "공유할 수 없습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_cannot_share), Toast.LENGTH_SHORT).show()
         }
     }
 
-    // --- 정렬, 검색, 데이터 로드 ---
+    // --- ?뺣젹, 寃?? ?곗씠??濡쒕뱶 ---
     private fun loadSavedSortSettings() {
+        if (currentMode == "recent") {
+            currentSortMode = "date"
+            isAscending = false
+            return
+        }
+
         val sortKey = "sort_mode_$currentMode"
         val ascKey = "is_ascending_$currentMode"
         val defaultSortMode = if (currentMode == "folder") "name" else "date"
@@ -863,6 +856,8 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun saveSortSettings() {
+        if (currentMode == "recent") return
+
         val editor = prefs.edit()
         val sortKey = "sort_mode_$currentMode"
         val ascKey = "is_ascending_$currentMode"
@@ -888,8 +883,16 @@ class FileListActivity : AppCompatActivity() {
 
         btnSearch.setOnClickListener {
             isSearchMode = true
-            currentSortMode = "name"
-            isAscending = true
+            val btnSearchSort: ImageView = findViewById(R.id.btnSearchSort)
+            if (currentMode == "recent") {
+                currentSortMode = "date"
+                isAscending = false
+                btnSearchSort.visibility = View.VISIBLE
+            } else {
+                currentSortMode = "name"
+                isAscending = true
+                btnSearchSort.visibility = View.VISIBLE
+            }
 
             headerNormal.visibility = View.GONE
             headerSearch.visibility = View.VISIBLE
@@ -913,6 +916,12 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun performSearch(query: String) {
+        if (currentMode == "recent" && lastRecentSearchQueryForSortReset != query) {
+            currentSortMode = "date"
+            isAscending = false
+            lastRecentSearchQueryForSortReset = query
+        }
+
         searchJob?.cancel()
         if (query.isEmpty()) {
             lifecycleScope.launch {
@@ -921,6 +930,7 @@ class FileListActivity : AppCompatActivity() {
                     "video" -> repository.getAllVideos()
                     "audio" -> repository.getAllAudio()
                     "download" -> repository.getDownloads()
+                    "recent" -> repository.getRecentFiles(maxAgeDays = null)
                     else -> repository.getFilesByPath(currentPath)
                 }
                 applySortAndSubmit(rawFiles, isSearchResult = true)
@@ -933,6 +943,7 @@ class FileListActivity : AppCompatActivity() {
                 "image" -> repository.getAllImages(query)
                 "video" -> repository.getAllVideos(query)
                 "audio" -> repository.getAllAudio(query)
+                "recent" -> repository.getRecentFiles(query = query, maxAgeDays = null)
                 "download" -> {
                     val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
                     repository.searchRecursive(downloadPath, query)
@@ -963,6 +974,8 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun showSortMenu(view: View) {
+        if (currentMode == "recent" && !isSearchMode) return
+
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_sort, popup.menu)
 
@@ -986,7 +999,9 @@ class FileListActivity : AppCompatActivity() {
             }
 
             if (!isSearchMode) {
-                saveSortSettings()
+                if (currentMode != "recent") {
+                    saveSortSettings()
+                }
                 loadData(currentMode, currentPath)
             } else {
                 performSearch(currentSearchQuery)
@@ -1000,6 +1015,9 @@ class FileListActivity : AppCompatActivity() {
         val sortedFiles = files.sortedWith(Comparator { o1, o2 ->
             if (o1.isDirectory != o2.isDirectory) {
                 return@Comparator if (o1.isDirectory) -1 else 1
+            }
+            if (currentMode == "recent" && !isSearchMode) {
+                return@Comparator o2.dateModified.compareTo(o1.dateModified)
             }
             val result = when (currentSortMode) {
                 "name" -> o1.name.lowercase().compareTo(o2.name.lowercase())
@@ -1022,45 +1040,55 @@ class FileListActivity : AppCompatActivity() {
             layoutEmpty.visibility = View.VISIBLE
 
             if (isSearchResult) {
-                tvEmptyTitle.text = "검색 결과가 없어요"
-                tvEmptyMessage.text = "다른 검색어로 시도해 보세요."
+                tvEmptyTitle.text = getString(R.string.empty_search_title)
+                tvEmptyMessage.text = getString(R.string.empty_search_message)
                 ivEmptyIcon.setImageResource(R.drawable.ic_search)
             } else {
-                tvEmptyTitle.text = "폴더가 비어있어요"
-                tvEmptyMessage.text = "파일이 없습니다."
+                tvEmptyTitle.text = getString(R.string.empty_folder_title)
+                tvEmptyMessage.text = getString(R.string.empty_folder_message)
                 ivEmptyIcon.setImageResource(R.drawable.ic_folder_solid)
             }
         } else {
             rvFiles.visibility = View.VISIBLE
             layoutEmpty.visibility = View.GONE
+            val supportsDateSections = currentMode == "recent" ||
+                currentMode == "image" ||
+                currentMode == "video" ||
+                currentMode == "audio" ||
+                currentMode == "download"
+            adapter.showDateHeaders = supportsDateSections && currentSortMode == "date"
             adapter.submitList(sortedFiles)
         }
 
         if (isSearchResult) {
-            tvFileCount.text = "${sortedFiles.size}개 검색됨"
+            tvFileCount.text = getString(R.string.file_count_search_format, sortedFiles.size)
         } else {
+            if (currentMode == "recent" && isRecentCountLoading) {
+                tvFileCount.text = getString(R.string.loading_label)
+                return
+            }
             if (currentMode == "folder") {
                 val folderCount = sortedFiles.count { it.isDirectory }
                 val fileCount = sortedFiles.count { !it.isDirectory }
 
                 val textParts = mutableListOf<String>()
-                if (folderCount > 0) textParts.add("${folderCount}개 폴더")
-                if (fileCount > 0) textParts.add("${fileCount}개 파일")
+                if (folderCount > 0) textParts.add(getString(R.string.folder_count_format, folderCount))
+                if (fileCount > 0) textParts.add(getString(R.string.file_count_format, fileCount))
 
                 if (textParts.isEmpty()) {
-                    tvFileCount.text = "0개 항목"
+                    tvFileCount.text = getString(R.string.item_count_zero)
                 } else {
-                    tvFileCount.text = textParts.joinToString(" • ")
+                    tvFileCount.text = textParts.joinToString(getString(R.string.count_join_separator))
                 }
             } else {
-                tvFileCount.text = "${sortedFiles.size}개 파일"
+                tvFileCount.text = getString(R.string.file_count_format, sortedFiles.size)
             }
         }
     }
 
-    // loadData: 경로 표시 및 붙여넣기 바 UI 갱신 호출
+    // loadData: 寃쎈줈 ?쒖떆 諛?遺숈뿬?ｊ린 諛?UI 媛깆떊 ?몄텧
     private fun loadData(mode: String, path: String) {
-        // 이전 로딩 작업 취소
+        // ?댁쟾 濡쒕뵫 ?묒뾽 痍⑥냼
         loadJob?.cancel()
 
         currentMode = mode
@@ -1068,12 +1096,16 @@ class FileListActivity : AppCompatActivity() {
 
         val tvTitle = findViewById<TextView>(R.id.tvPageTitle)
         val btnNewFolder = findViewById<ImageView>(R.id.btnNewFolder)
+        val btnSort = findViewById<ImageView>(R.id.btnSort)
+        val btnSearchSort = findViewById<ImageView>(R.id.btnSearchSort)
 
         val scrollViewPath = findViewById<HorizontalScrollView>(R.id.scrollViewPath)
         val tvPathIndicator = findViewById<TextView>(R.id.tvPathIndicator)
 
         if (mode == "folder") {
             btnNewFolder.visibility = View.VISIBLE
+            btnSort.visibility = View.VISIBLE
+            btnSearchSort.visibility = View.VISIBLE
 
             if (path == rootPath) {
                 tvTitle.text = rootTitle
@@ -1085,7 +1117,7 @@ class FileListActivity : AppCompatActivity() {
                     scrollViewPath.visibility = View.VISIBLE
 
                     val relativePath = path.removePrefix(rootPath)
-                    val displayPath = "내장 메모리" + relativePath.replace("/", " > ")
+                    val displayPath = getString(R.string.internal_storage) + relativePath.replace("/", " > ")
                     tvPathIndicator.text = displayPath
 
                     scrollViewPath.post {
@@ -1096,16 +1128,44 @@ class FileListActivity : AppCompatActivity() {
         } else {
             tvTitle.text = rootTitle
             btnNewFolder.visibility = View.GONE
+            if (mode == "recent") {
+                btnSort.visibility = View.GONE
+            } else {
+                btnSort.visibility = View.VISIBLE
+                btnSearchSort.visibility = View.VISIBLE
+            }
             if (scrollViewPath != null) scrollViewPath.visibility = View.GONE
         }
 
         updatePasteBarUI()
 
-        // [추가] 헤더 아이콘 갱신 (햄버거 <-> 뒤로가기)
+        // [異붽?] ?ㅻ뜑 ?꾩씠肄?媛깆떊 (?꾨쾭嫄?<-> ?ㅻ줈媛湲?
         updateHeaderIcon()
 
-        // 새로운 로딩 작업 시작
+        // ?덈줈??濡쒕뵫 ?묒뾽 ?쒖옉
         loadJob = lifecycleScope.launch {
+            if (mode == "recent") {
+                val initialFiles = repository.getRecentFiles(limit = RECENT_INITIAL_BATCH, maxAgeDays = null)
+                if (initialFiles.isEmpty()) {
+                    val fullFallback = repository.getRecentFiles(maxAgeDays = null)
+                    isRecentCountLoading = false
+                    applySortAndSubmit(fullFallback, isSearchResult = false)
+                    return@launch
+                }
+
+                val shouldLoadFull = initialFiles.size >= RECENT_INITIAL_BATCH
+                isRecentCountLoading = shouldLoadFull
+                applySortAndSubmit(initialFiles, isSearchResult = false)
+
+                if (shouldLoadFull) {
+                    val fullFiles = repository.getRecentFiles(maxAgeDays = null)
+                    isRecentCountLoading = false
+                    applySortAndSubmit(fullFiles, isSearchResult = false)
+                }
+                return@launch
+            }
+            isRecentCountLoading = false
+
             val rawFiles = when (mode) {
                 "image" -> repository.getAllImages()
                 "video" -> repository.getAllVideos()
@@ -1117,30 +1177,30 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // [수정됨] 개별 파일 메뉴 옵션 핸들러
+    // [?섏젙?? 媛쒕퀎 ?뚯씪 硫붾돱 ?듭뀡 ?몃뱾??
     private fun showFileOptionMenu(view: View, fileItem: FileItem) {
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_file_item, popup.menu)
 
-        // 즐겨찾기 메뉴 설정
+        // 利먭꺼李얘린 硫붾돱 ?ㅼ젙
         val favItem = popup.menu.findItem(R.id.action_favorite)
         val isFav = FavoritesManager.isFavorite(this, fileItem.path)
 
-        // [변경] 폴더/파일 구분 없이 즐겨찾기 메뉴 활성화
+        // [蹂寃? ?대뜑/?뚯씪 援щ텇 ?놁씠 利먭꺼李얘린 硫붾돱 ?쒖꽦??
         favItem.isVisible = true
-        favItem.title = if (isFav) "즐겨찾기 해제" else "즐겨찾기 추가"
+        favItem.title = if (isFav) getString(R.string.favorite_remove) else getString(R.string.menu_favorite_add)
 
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.action_favorite -> {
                     if (FavoritesManager.isFavorite(this, fileItem.path)) {
                         FavoritesManager.remove(this, fileItem.path)
-                        Toast.makeText(this, "즐겨찾기 해제됨", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, getString(R.string.favorite_removed), Toast.LENGTH_SHORT).show()
                     } else {
                         FavoritesManager.add(this, fileItem.path)
-                        Toast.makeText(this, "즐겨찾기 추가됨", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, getString(R.string.favorite_added), Toast.LENGTH_SHORT).show()
                     }
-                    updateDrawerMenu() // 메뉴 갱신
+                    updateDrawerMenu() // 硫붾돱 媛깆떊
                     true
                 }
                 R.id.action_share -> { shareFile(fileItem); true }
@@ -1171,19 +1231,23 @@ class FileListActivity : AppCompatActivity() {
         tvDate.text = dateFormat.format(Date(file.lastModified()))
 
         if (file.isDirectory) {
-            tvType.text = "폴더"
+            tvType.text = getString(R.string.details_type_folder_label)
             val items = file.list()?.size ?: 0
-            tvSize.text = "$items 항목"
+            tvSize.text = getString(R.string.details_items_count_format, items)
         } else {
             val extension = file.extension.uppercase()
-            tvType.text = if (extension.isNotEmpty()) "$extension 파일" else "파일"
+            tvType.text = if (extension.isNotEmpty()) {
+                getString(R.string.details_file_type_format, extension)
+            } else {
+                getString(R.string.details_file_type_generic)
+            }
             tvSize.text = Formatter.formatFileSize(this, file.length())
         }
 
         AlertDialog.Builder(this)
-            .setTitle("상세 정보")
+            .setTitle(getString(R.string.details_title))
             .setView(view)
-            .setPositiveButton("확인", null)
+            .setPositiveButton(android.R.string.ok, null)
             .show()
     }
 
@@ -1204,13 +1268,13 @@ class FileListActivity : AppCompatActivity() {
         container.addView(editText)
 
         AlertDialog.Builder(this)
-            .setTitle("이름 변경")
+            .setTitle(getString(R.string.rename_title))
             .setView(container)
-            .setPositiveButton("변경") { _, _ ->
+            .setPositiveButton(getString(R.string.action_change)) { _, _ ->
                 val newName = editText.text.toString().trim()
                 if (newName.isNotEmpty() && newName != fileItem.name) renameFile(fileItem, newName)
             }
-            .setNegativeButton("취소", null)
+            .setNegativeButton(getString(R.string.action_cancel), null)
             .show()
     }
 
@@ -1218,15 +1282,15 @@ class FileListActivity : AppCompatActivity() {
         val oldFile = File(fileItem.path)
         val newFile = File(oldFile.parent, newName)
         if (newFile.exists()) {
-            Toast.makeText(this, "이미 같은 이름의 파일이 존재합니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.rename_exists_error), Toast.LENGTH_SHORT).show()
             return
         }
         if (oldFile.renameTo(newFile)) {
-            Toast.makeText(this, "이름이 변경되었습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.rename_success), Toast.LENGTH_SHORT).show()
             MediaScannerConnection.scanFile(this, arrayOf(oldFile.absolutePath, newFile.absolutePath), null, null)
             loadData(currentMode, currentPath)
         } else {
-            Toast.makeText(this, "이름 변경 실패. 권한을 확인하세요.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.rename_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1239,18 +1303,18 @@ class FileListActivity : AppCompatActivity() {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            startActivity(Intent.createChooser(intent, "파일 공유"))
+            startActivity(Intent.createChooser(intent, getString(R.string.menu_share)))
         } catch (e: Exception) {
-            Toast.makeText(this, "공유할 수 없습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.error_cannot_share), Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun showDeleteDialog(fileItem: FileItem) {
         AlertDialog.Builder(this)
-            .setTitle("파일 삭제")
-            .setMessage("'${fileItem.name}'을(를) 삭제하시겠습니까?")
-            .setPositiveButton("삭제") { _, _ -> deleteFile(fileItem) }
-            .setNegativeButton("취소", null)
+            .setTitle(getString(R.string.menu_delete))
+            .setMessage(getString(R.string.confirm_delete_file_message, fileItem.name))
+            .setPositiveButton(getString(R.string.menu_delete)) { _, _ -> deleteFile(fileItem) }
+            .setNegativeButton(getString(R.string.action_cancel), null)
             .show()
     }
 
@@ -1260,11 +1324,11 @@ class FileListActivity : AppCompatActivity() {
             if (file.isDirectory) file.deleteRecursively() else file.delete()
             val deleted = !file.exists()
             if (deleted) {
-                Toast.makeText(this, "삭제되었습니다.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.msg_deleted), Toast.LENGTH_SHORT).show()
                 MediaScannerConnection.scanFile(this, arrayOf(file.absolutePath), null, null)
                 loadData(currentMode, currentPath)
             } else {
-                Toast.makeText(this, "삭제 실패. 권한을 확인하세요.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.error_delete_failed), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1278,7 +1342,7 @@ class FileListActivity : AppCompatActivity() {
 
     private fun showCreateFolderDialog() {
         val editText = EditText(this)
-        editText.hint = "새 폴더 이름"
+        editText.hint = getString(R.string.new_folder_hint)
         editText.setSingleLine()
 
         val container = android.widget.FrameLayout(this)
@@ -1291,28 +1355,29 @@ class FileListActivity : AppCompatActivity() {
         container.addView(editText)
 
         AlertDialog.Builder(this)
-            .setTitle("새 폴더 만들기")
+            .setTitle(getString(R.string.new_folder_title))
             .setView(container)
-            .setPositiveButton("생성") { _, _ ->
+            .setPositiveButton(getString(R.string.action_create)) { _, _ ->
                 val folderName = editText.text.toString().trim()
                 if (folderName.isNotEmpty()) createFolder(folderName)
             }
-            .setNegativeButton("취소", null)
+            .setNegativeButton(getString(R.string.action_cancel), null)
             .show()
     }
 
     private fun createFolder(name: String) {
         val newFolder = File(currentPath, name)
         if (newFolder.exists()) {
-            Toast.makeText(this, "이미 존재하는 폴더입니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.folder_exists_error), Toast.LENGTH_SHORT).show()
             return
         }
         if (newFolder.mkdirs()) {
-            Toast.makeText(this, "폴더가 생성되었습니다.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.folder_created), Toast.LENGTH_SHORT).show()
             MediaScannerConnection.scanFile(this, arrayOf(newFolder.absolutePath), null, null)
             loadData(currentMode, currentPath)
         } else {
-            Toast.makeText(this, "폴더 생성 실패.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.folder_create_failed), Toast.LENGTH_SHORT).show()
         }
     }
 }
+

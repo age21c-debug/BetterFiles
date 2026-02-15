@@ -1,4 +1,4 @@
-<resources>
+﻿<resources>
     <string name="app_name">BetterFiles</string>
 
     <string name="home_title">Better Files</string>
@@ -9,6 +9,9 @@
     <string name="videos">Videos</string>
     <string name="audio">Audio</string>
     <string name="downloads">Downloads</string>
+    <string name="recent_files">Recent Files</string>
+    <string name="see_all">See all</string>
+    <string name="recent_empty">No recent files</string>
 
     <string name="file_count_zero">0 files</string>
     <string name="path_indicator_sample">Internal Storage &gt; Parent folder</string>
@@ -21,6 +24,8 @@
     <string name="action_paste">Paste</string>
     <string name="action_select_all">Select all</string>
     <string name="action_more">More</string>
+    <string name="action_location">Go to location</string>
+    <string name="action_info">Info</string>
 
     <string name="menu_favorite_add">Add to favorites</string>
     <string name="menu_share">Share</string>
@@ -55,6 +60,10 @@
     <string name="zip_name_sample">Archive.zip</string>
     <string name="zip_info_loading">Reading archive information...</string>
     <string name="zip_included_files">Included files:</string>
+    <string name="unzip_title">Unzip</string>
+    <string name="unzip_action">Extract</string>
+    <string name="zip_dialog_title">Compress</string>
+    <string name="zip_dialog_message_format">Compress %1$d items</string>
 
     <string name="item_filename_sample">file_name.jpg</string>
     <string name="item_date_sample">2024.01.31</string>
@@ -64,4 +73,71 @@
 
     <string name="nav_header_title">Better Files</string>
     <string name="nav_header_subtitle">My file manager</string>
+    <string name="recent_item_thumb_desc">Recent file thumbnail</string>
+    <string name="recent_item_type_icon_desc">File type icon</string>
+    <string name="error_no_app_to_open">No app can open this file.</string>
+    <string name="error_cannot_share">Cannot share this file.</string>
+    <string name="error_delete_failed">Delete failed. Check permissions.</string>
+    <string name="msg_deleted">Deleted.</string>
+    <string name="info_format">%1$s\n%2$s\n%3$s\n%4$s</string>
+    <string name="label_name">Name: %1$s</string>
+    <string name="label_path">Path: %1$s</string>
+    <string name="label_type">Type: %1$s</string>
+    <string name="label_modified">Modified: %1$s</string>
+    <string name="date_header_today">Today</string>
+    <string name="date_header_yesterday">Yesterday</string>
+    <string name="selection_count_format">%1$d selected</string>
+    <string name="confirm_delete_selected_message">Delete %1$d selected items?</string>
+    <string name="deleted_count_format">%1$d items deleted.</string>
+    <string name="empty_search_title">No results found</string>
+    <string name="empty_search_message">Try a different keyword.</string>
+    <string name="file_count_search_format">%1$d results</string>
+    <string name="folder_count_format">%1$d folders</string>
+    <string name="file_count_format">%1$d files</string>
+    <string name="item_count_zero">0 items</string>
+    <string name="count_join_separator"> / </string>
+    <string name="favorite_remove">Remove favorite</string>
+    <string name="favorite_removed">Removed from favorites</string>
+    <string name="favorite_added">Added to favorites</string>
+    <string name="details_title">Details</string>
+    <string name="action_change">Change</string>
+    <string name="rename_title">Rename</string>
+    <string name="rename_exists_error">A file or folder with the same name already exists.</string>
+    <string name="rename_success">Name changed.</string>
+    <string name="rename_failed">Rename failed. Check permissions.</string>
+    <string name="confirm_delete_file_message">Delete %1$s?</string>
+    <string name="new_folder_hint">New folder name</string>
+    <string name="new_folder_title">Create new folder</string>
+    <string name="action_create">Create</string>
+    <string name="folder_exists_error">A folder with the same name already exists.</string>
+    <string name="folder_created">Folder created.</string>
+    <string name="folder_create_failed">Failed to create folder.</string>
+    <string name="details_type_folder_label">Folder</string>
+    <string name="details_items_count_format">%1$d items</string>
+    <string name="details_file_type_format">%1$s file</string>
+    <string name="details_file_type_generic">File</string>
+    <string name="default_page_title">Files</string>
+    <string name="favorites_empty">(No favorites)</string>
+    <string name="zip_summary_format">Total %1$d files · Extracted size %2$s</string>
+    <string name="zip_more_items_format">...and %1$d more items</string>
+    <string name="zip_content_empty">No content</string>
+    <string name="zip_info_failed">Could not read archive information.</string>
+    <string name="unzip_success">Extraction completed.</string>
+    <string name="unzip_failed_format">Extraction failed: %1$s</string>
+    <string name="paste_waiting_move_format">%1$d items ready to move...</string>
+    <string name="paste_waiting_copy_format">%1$d items ready to copy...</string>
+    <string name="paste_here_move">Move here</string>
+    <string name="paste_here_copy">Copy here</string>
+    <string name="folder_not_writable">Cannot write to this folder.</string>
+    <string name="paste_result_move">moved</string>
+    <string name="paste_result_copy">copied</string>
+    <string name="paste_result_format">%1$d items %2$s.</string>
+    <string name="operation_failed">Operation failed.</string>
+    <string name="clipboard_ready_move">Move selected. Tap "Move here" in destination.</string>
+    <string name="clipboard_ready_copy">Copy selected. Tap "Copy here" in destination.</string>
+    <string name="zip_success_format">Compressed: %1$s</string>
+    <string name="zip_failed_format">Compression failed: %1$s</string>
+    <string name="loading_label">Loading...</string>
 </resources>
+
+

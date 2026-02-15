@@ -11,6 +11,11 @@
             android:id="@+id/nav_download"
             android:icon="@android:drawable/stat_sys_download"
             android:title="@string/downloads" />
+
+        <item
+            android:id="@+id/nav_recent"
+            android:icon="@android:drawable/ic_menu_recent_history"
+            android:title="@string/recent_files" />
     </group>
 
     <item

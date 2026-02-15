@@ -12,6 +12,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
+import kotlin.math.max
 
 class FileRepository(private val context: Context) {
 
@@ -58,6 +59,110 @@ class FileRepository(private val context: Context) {
         val selectionArgs = arrayOf("Download/%")
         val sortOrder = "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
         queryMediaStore(collection, selection, selectionArgs, sortOrder)
+    }
+
+    suspend fun getRecentFiles(
+        query: String? = null,
+        limit: Int? = null,
+        maxAgeDays: Int? = 30
+    ): List<FileItem> = withContext(Dispatchers.IO) {
+        val collection = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns._ID,
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.DATA,
+            MediaStore.Files.FileColumns.RELATIVE_PATH,
+            MediaStore.Files.FileColumns.SIZE,
+            MediaStore.Files.FileColumns.DATE_MODIFIED,
+            MediaStore.Files.FileColumns.DATE_ADDED,
+            MediaStore.Files.FileColumns.MIME_TYPE
+        )
+
+        val selectionParts = mutableListOf<String>()
+        val args = mutableListOf<String>()
+        selectionParts += "${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL"
+        selectionParts += "(${MediaStore.Files.FileColumns.DATA} IS NULL OR ${MediaStore.Files.FileColumns.DATA} NOT LIKE ?)"
+        args += "%/Android/data/%"
+
+        if (!query.isNullOrBlank()) {
+            selectionParts += "${MediaStore.Files.FileColumns.DISPLAY_NAME} LIKE ?"
+            args += "%$query%"
+        }
+
+        if (maxAgeDays != null) {
+            val nowSeconds = System.currentTimeMillis() / 1000
+            val cutoffSeconds = nowSeconds - (maxAgeDays.toLong() * 24L * 60L * 60L)
+            selectionParts += "(${MediaStore.Files.FileColumns.DATE_MODIFIED} >= ? OR ${MediaStore.Files.FileColumns.DATE_ADDED} >= ?)"
+            args += cutoffSeconds.toString()
+            args += cutoffSeconds.toString()
+        }
+
+        val selection = selectionParts.joinToString(" AND ")
+        val sortOrder = "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
+        val recentItems = mutableListOf<FileItem>()
+
+        try {
+            context.contentResolver.query(
+                collection,
+                projection,
+                selection,
+                args.toTypedArray(),
+                sortOrder
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
+                val pathCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA)
+                val relativePathCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.RELATIVE_PATH)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
+                val dateModifiedCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_MODIFIED)
+                val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_ADDED)
+                val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    val name = cursor.getString(nameCol) ?: continue
+                    val dataPath = if (pathCol >= 0) cursor.getString(pathCol) else null
+                    val relativePath = if (relativePathCol >= 0) cursor.getString(relativePathCol) else null
+                    val path = when {
+                        !dataPath.isNullOrBlank() -> dataPath
+                        !relativePath.isNullOrBlank() ->
+                            File(Environment.getExternalStorageDirectory(), relativePath).resolve(name).absolutePath
+                        else -> continue
+                    }
+                    if (path.contains("${File.separator}Android${File.separator}data${File.separator}", ignoreCase = true)) {
+                        continue
+                    }
+                    val file = File(path)
+                    if (!file.exists() || file.isDirectory) continue
+
+                    val dateModified = cursor.getLong(dateModifiedCol)
+                    val dateAdded = cursor.getLong(dateAddedCol)
+                    val recentTimestamp = max(dateModified, dateAdded)
+                    val mimeType = cursor.getString(mimeCol) ?: "application/octet-stream"
+                    val contentUri = ContentUris.withAppendedId(collection, id)
+
+                    recentItems += FileItem(
+                        id = id,
+                        name = name,
+                        path = path,
+                        size = cursor.getLong(sizeCol),
+                        dateModified = recentTimestamp,
+                        mimeType = mimeType,
+                        isDirectory = false,
+                        contentUri = contentUri
+                    )
+
+                    if (limit != null && recentItems.size >= limit) {
+                        break
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        val sorted = recentItems.sortedByDescending { it.dateModified }
+        if (limit != null) sorted.take(limit) else sorted
     }
 
     // 5. 실제 경로(Path)를 기반으로 파일 목록 가져오기 (폴더 탐색용)
