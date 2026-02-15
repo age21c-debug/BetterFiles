@@ -138,12 +138,28 @@ class MainActivity : AppCompatActivity() {
         navViewMain.itemIconTintList = null
         val menu = navViewMain.menu
         val greyColor = Color.parseColor("#757575")
+        menu.findItem(R.id.nav_document)?.icon?.mutate()?.setTint(greyColor)
+        menu.findItem(R.id.nav_image)?.icon?.mutate()?.setTint(greyColor)
+        menu.findItem(R.id.nav_video)?.icon?.mutate()?.setTint(greyColor)
+        menu.findItem(R.id.nav_audio)?.icon?.mutate()?.setTint(greyColor)
         menu.findItem(R.id.nav_internal_storage)?.icon?.mutate()?.setTint(greyColor)
         menu.findItem(R.id.nav_download)?.icon?.mutate()?.setTint(greyColor)
         menu.findItem(R.id.nav_recent)?.icon?.mutate()?.setTint(greyColor)
 
         navViewMain.setNavigationItemSelectedListener { menuItem: MenuItem ->
             when (menuItem.itemId) {
+                R.id.nav_document -> {
+                    openActivity(mode = "document", title = getString(R.string.documents))
+                }
+                R.id.nav_image -> {
+                    openActivity(mode = "image", title = getString(R.string.images))
+                }
+                R.id.nav_video -> {
+                    openActivity(mode = "video", title = getString(R.string.videos))
+                }
+                R.id.nav_audio -> {
+                    openActivity(mode = "audio", title = getString(R.string.audio))
+                }
                 R.id.nav_internal_storage -> {
                     openActivity(
                         mode = "folder",

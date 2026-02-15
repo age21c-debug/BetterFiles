@@ -3,9 +3,9 @@
 
     <group android:checkableBehavior="single">
         <item
-            android:id="@+id/nav_internal_storage"
-            android:icon="@drawable/ic_folder_solid"
-            android:title="@string/internal_storage" />
+            android:id="@+id/nav_document"
+            android:icon="@drawable/ic_file"
+            android:title="@string/documents" />
 
         <item
             android:id="@+id/nav_download"
@@ -13,9 +13,29 @@
             android:title="@string/downloads" />
 
         <item
+            android:id="@+id/nav_image"
+            android:icon="@android:drawable/ic_menu_gallery"
+            android:title="@string/images" />
+
+        <item
+            android:id="@+id/nav_video"
+            android:icon="@android:drawable/ic_media_play"
+            android:title="@string/videos" />
+
+        <item
+            android:id="@+id/nav_audio"
+            android:icon="@drawable/ic_audio"
+            android:title="@string/audio" />
+
+        <item
             android:id="@+id/nav_recent"
             android:icon="@android:drawable/ic_menu_recent_history"
             android:title="@string/recent_files" />
+
+        <item
+            android:id="@+id/nav_internal_storage"
+            android:icon="@drawable/ic_folder_solid"
+            android:title="@string/internal_storage" />
     </group>
 
     <item

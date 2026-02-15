@@ -179,8 +179,20 @@ class FileListActivity : AppCompatActivity() {
         val internalItem = menu.findItem(R.id.nav_internal_storage)
         internalItem?.icon?.mutate()?.setTint(greyColor)
 
+        val documentItem = menu.findItem(R.id.nav_document)
+        documentItem?.icon?.mutate()?.setTint(greyColor)
+
         val downloadItem = menu.findItem(R.id.nav_download)
         downloadItem?.icon?.mutate()?.setTint(greyColor)
+
+        val imageItem = menu.findItem(R.id.nav_image)
+        imageItem?.icon?.mutate()?.setTint(greyColor)
+
+        val videoItem = menu.findItem(R.id.nav_video)
+        videoItem?.icon?.mutate()?.setTint(greyColor)
+
+        val audioItem = menu.findItem(R.id.nav_audio)
+        audioItem?.icon?.mutate()?.setTint(greyColor)
 
         val recentItem = menu.findItem(R.id.nav_recent)
         recentItem?.icon?.mutate()?.setTint(greyColor)
@@ -192,9 +204,25 @@ class FileListActivity : AppCompatActivity() {
                     rootTitle = getString(R.string.internal_storage)
                     loadData("folder", rootPath)
                 }
+                R.id.nav_document -> {
+                    rootTitle = getString(R.string.documents)
+                    loadData("document", rootPath)
+                }
                 R.id.nav_download -> {
                     val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
                     loadData("folder", downloadPath)
+                }
+                R.id.nav_image -> {
+                    rootTitle = getString(R.string.images)
+                    loadData("image", rootPath)
+                }
+                R.id.nav_video -> {
+                    rootTitle = getString(R.string.videos)
+                    loadData("video", rootPath)
+                }
+                R.id.nav_audio -> {
+                    rootTitle = getString(R.string.audio)
+                    loadData("audio", rootPath)
                 }
                 R.id.nav_recent -> {
                     rootTitle = getString(R.string.recent_files)
