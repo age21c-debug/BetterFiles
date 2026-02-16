@@ -28,4 +28,9 @@
         android:id="@+id/action_selection_details"
         android:title="@string/menu_details"
         android:icon="@android:drawable/ic_menu_info_details" />
+
+    <item
+        android:id="@+id/action_selection_exclude_folder"
+        android:title="@string/menu_exclude_folder_from_recent"
+        android:icon="@android:drawable/ic_menu_close_clear_cancel" />
 </menu>

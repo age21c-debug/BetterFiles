@@ -39,6 +39,9 @@
         <activity
             android:name=".MainRenewalPreviewActivity"
             android:exported="false" />
+        <activity
+            android:name=".RecentExclusionActivity"
+            android:exported="false" />
     <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

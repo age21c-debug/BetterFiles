@@ -52,6 +52,8 @@ import java.util.Locale
 class FileListActivity : AppCompatActivity() {
     companion object {
         private const val RECENT_INITIAL_BATCH = 120
+        private const val MENU_EXCLUDE_RECENT_FOLDER = 9001
+        private const val MENU_RECENT_MANAGE_EXCLUDED = 9002
     }
 
     private lateinit var adapter: FileAdapter
@@ -709,9 +711,11 @@ class FileListActivity : AppCompatActivity() {
         val detailsItem = popup.menu.findItem(R.id.action_selection_details)
         val favoriteItem = popup.menu.findItem(R.id.action_selection_favorite)
         val renameItem = popup.menu.findItem(R.id.action_selection_rename)
+        val excludeFolderItem = popup.menu.findItem(R.id.action_selection_exclude_folder)
         detailsItem.isVisible = selectedItems.size == 1
         favoriteItem.isVisible = selectedItems.size == 1
         renameItem.isVisible = selectedItems.size == 1
+        excludeFolderItem.isVisible = currentMode == "recent" && selectedItems.isNotEmpty()
         if (selectedItems.size == 1) {
             val isFav = FavoritesManager.isFavorite(this, selectedItems.first())
             favoriteItem.title = if (isFav) getString(R.string.favorite_remove) else getString(R.string.menu_favorite_add)
@@ -729,6 +733,10 @@ class FileListActivity : AppCompatActivity() {
                 }
                 R.id.action_zip -> {
                     showZipDialog(selectedItems)
+                    true
+                }
+                R.id.action_selection_exclude_folder -> {
+                    excludeParentFoldersFromRecent(selectedItems)
                     true
                 }
                 R.id.action_selection_favorite -> {
@@ -753,6 +761,27 @@ class FileListActivity : AppCompatActivity() {
             }
         }
         popup.show()
+    }
+
+    private fun excludeParentFoldersFromRecent(selectedItems: List<FileItem>) {
+        if (selectedItems.isEmpty()) return
+        val parentPaths = selectedItems.mapNotNull { File(it.path).parent }.toSet()
+        var addedCount = 0
+        var alreadyCount = 0
+        for (parent in parentPaths) {
+            if (RecentExclusionManager.addFolder(this, parent)) {
+                addedCount++
+            } else {
+                alreadyCount++
+            }
+        }
+        Toast.makeText(
+            this,
+            getString(R.string.recent_exclusion_selection_result, addedCount, alreadyCount),
+            Toast.LENGTH_SHORT
+        ).show()
+        closeSelectionMode()
+        loadData("recent", rootPath)
     }
 
     private fun showZipDialog(selectedItems: List<FileItem>) {
@@ -977,6 +1006,7 @@ class FileListActivity : AppCompatActivity() {
         val btnSort: ImageView = findViewById(R.id.btnSort)
         val btnNewFolder: ImageView = findViewById(R.id.btnNewFolder)
         val btnSearch: ImageView = findViewById(R.id.btnSearch)
+        val btnRecentMore: ImageView = findViewById(R.id.btnRecentMore)
         val btnCloseSearch: ImageView = findViewById(R.id.btnCloseSearch)
         val etSearch: EditText = findViewById(R.id.etSearch)
         val headerNormal: LinearLayout = findViewById(R.id.headerNormal)
@@ -990,6 +1020,9 @@ class FileListActivity : AppCompatActivity() {
 
         btnSearch.setOnClickListener {
             enterSearchMode()
+        }
+        btnRecentMore.setOnClickListener { view ->
+            showRecentHeaderMenu(view)
         }
 
         btnCloseSearch.setOnClickListener {
@@ -1220,6 +1253,7 @@ class FileListActivity : AppCompatActivity() {
         val tvTitle = findViewById<TextView>(R.id.tvPageTitle)
         val btnNewFolder = findViewById<ImageView>(R.id.btnNewFolder)
         val btnSort = findViewById<ImageView>(R.id.btnSort)
+        val btnRecentMore = findViewById<ImageView>(R.id.btnRecentMore)
         val btnSearchSort = findViewById<ImageView>(R.id.btnSearchSort)
 
         val scrollViewPath = findViewById<HorizontalScrollView>(R.id.scrollViewPath)
@@ -1228,6 +1262,7 @@ class FileListActivity : AppCompatActivity() {
         if (mode == "folder") {
             btnNewFolder.visibility = View.VISIBLE
             btnSort.visibility = View.VISIBLE
+            btnRecentMore.visibility = View.GONE
             btnSearchSort.visibility = View.VISIBLE
 
             if (path == rootPath) {
@@ -1253,8 +1288,10 @@ class FileListActivity : AppCompatActivity() {
             btnNewFolder.visibility = View.GONE
             if (mode == "recent") {
                 btnSort.visibility = View.GONE
+                btnRecentMore.visibility = View.VISIBLE
             } else {
                 btnSort.visibility = View.VISIBLE
+                btnRecentMore.visibility = View.GONE
                 btnSearchSort.visibility = View.VISIBLE
             }
             if (scrollViewPath != null) scrollViewPath.visibility = View.GONE
@@ -1315,6 +1352,15 @@ class FileListActivity : AppCompatActivity() {
         favItem.isVisible = true
         favItem.title = if (isFav) getString(R.string.favorite_remove) else getString(R.string.menu_favorite_add)
 
+        if (currentMode == "recent") {
+            popup.menu.add(
+                0,
+                MENU_EXCLUDE_RECENT_FOLDER,
+                10_000,
+                getString(R.string.menu_exclude_folder_from_recent)
+            )
+        }
+
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.action_favorite -> {
@@ -1328,10 +1374,50 @@ class FileListActivity : AppCompatActivity() {
                 R.id.action_rename -> { showRenameDialog(fileItem); true }
                 R.id.action_delete -> { showDeleteDialog(fileItem); true }
                 R.id.action_details -> { showFileDetailsDialog(fileItem); true }
+                MENU_EXCLUDE_RECENT_FOLDER -> {
+                    excludeParentFolderFromRecent(fileItem)
+                    true
+                }
                 else -> false
             }
         }
         popup.show()
+    }
+
+    private fun showRecentHeaderMenu(view: View) {
+        val popup = PopupMenu(this, view)
+        popup.menu.add(
+            0,
+            MENU_RECENT_MANAGE_EXCLUDED,
+            0,
+            getString(R.string.recent_exclusion_title)
+        )
+        popup.setOnMenuItemClickListener { menuItem ->
+            when (menuItem.itemId) {
+                MENU_RECENT_MANAGE_EXCLUDED -> {
+                    startActivity(Intent(this, RecentExclusionActivity::class.java))
+                    true
+                }
+                else -> false
+            }
+        }
+        popup.show()
+    }
+
+    private fun excludeParentFolderFromRecent(fileItem: FileItem) {
+        val parentPath = File(fileItem.path).parent ?: run {
+            Toast.makeText(this, getString(R.string.error_cannot_exclude_folder), Toast.LENGTH_SHORT).show()
+            return
+        }
+        val added = RecentExclusionManager.addFolder(this, parentPath)
+        val folderName = File(parentPath).name.ifBlank { parentPath }
+        val message = if (added) {
+            getString(R.string.recent_excluded_folder_added, folderName)
+        } else {
+            getString(R.string.recent_excluded_folder_exists, folderName)
+        }
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        loadData("recent", rootPath)
     }
 
     private fun toggleFavorite(fileItem: FileItem) {

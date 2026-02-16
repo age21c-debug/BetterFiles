@@ -155,4 +155,16 @@
     <string name="preview_order_b">순서 B: 카테고리→최근 항목→저장공간</string>
     <string name="preview_order_c">순서 C: 카테고리(3x2)→최근 파일→저장공간</string>
     <string name="recent_files_preview">최근 파일</string>
+    <string name="menu_exclude_folder_from_recent">이 폴더 제외하기</string>
+    <string name="recent_excluded_folder_added">최근 항목에서 제외됨: %1$s</string>
+    <string name="recent_excluded_folder_exists">이미 제외된 폴더: %1$s</string>
+    <string name="error_cannot_exclude_folder">이 폴더는 제외할 수 없습니다.</string>
+    <string name="recent_exclusion_title">제외 폴더 관리</string>
+    <string name="recent_exclusion_subtitle">아래 폴더 안의 파일은 최근 항목에서 표시되지 않습니다.</string>
+    <string name="recent_exclusion_empty">제외된 폴더가 없습니다.</string>
+    <string name="recent_exclusion_remove_title">제외 해제</string>
+    <string name="recent_exclusion_remove_message">이 폴더를 다시 최근 항목에 표시할까요?\n\n%1$s</string>
+    <string name="recent_exclusion_removed">폴더 제외가 해제되었습니다.</string>
+    <string name="action_remove">해제</string>
+    <string name="recent_exclusion_selection_result">새로 제외됨 %1$d개 · 이미 제외됨 %2$d개</string>
 </resources>

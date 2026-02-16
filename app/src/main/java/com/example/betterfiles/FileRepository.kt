@@ -187,6 +187,7 @@ class FileRepository(private val context: Context) {
         )
         val sortOrder = "$sortColumn DESC"
         val recentItems = mutableListOf<FileItem>()
+        val excludedFolders = RecentExclusionManager.getAll(context)
 
         try {
             context.contentResolver.query(
@@ -217,6 +218,9 @@ class FileRepository(private val context: Context) {
                         else -> continue
                     }
                     if (path.contains("${File.separator}Android${File.separator}data${File.separator}", ignoreCase = true)) {
+                        continue
+                    }
+                    if (RecentExclusionManager.isExcluded(path, excludedFolders)) {
                         continue
                     }
                     val file = File(path)
