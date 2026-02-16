@@ -5,6 +5,7 @@ import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
+import android.content.Intent
 
 class StorageAnalysisActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -17,8 +18,13 @@ class StorageAnalysisActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.storage_feature_coming_soon), Toast.LENGTH_SHORT).show()
         }
         findViewById<CardView>(R.id.cardLargeFileCleanup).setOnClickListener {
-            Toast.makeText(this, getString(R.string.storage_feature_coming_soon), Toast.LENGTH_SHORT).show()
+            startActivity(
+                Intent(this, FileListActivity::class.java).apply {
+                    putExtra("mode", "large")
+                    putExtra("title", getString(R.string.storage_large_cleanup_title))
+                    putExtra("path", StorageVolumeHelper.getStorageRoots(this@StorageAnalysisActivity).internalRoot)
+                }
+            )
         }
     }
 }
-

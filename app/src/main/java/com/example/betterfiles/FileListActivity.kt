@@ -367,7 +367,8 @@ class FileListActivity : AppCompatActivity() {
             mode == "video" ||
             mode == "audio" ||
             mode == "document" ||
-            mode == "app"
+            mode == "app" ||
+            mode == "large"
     }
 
     private fun updateStorageTabsForMode(mode: String) {
@@ -1108,8 +1109,16 @@ class FileListActivity : AppCompatActivity() {
 
         val sortKey = "sort_mode_$currentMode"
         val ascKey = "is_ascending_$currentMode"
-        val defaultSortMode = if (currentMode == "folder") "name" else "date"
-        val defaultIsAscending = currentMode == "folder"
+        val defaultSortMode = when (currentMode) {
+            "folder" -> "name"
+            "large" -> "size"
+            else -> "date"
+        }
+        val defaultIsAscending = when (currentMode) {
+            "folder" -> true
+            "large" -> false
+            else -> false
+        }
 
         currentSortMode = prefs.getString(sortKey, defaultSortMode) ?: defaultSortMode
         isAscending = prefs.getBoolean(ascKey, defaultIsAscending)
@@ -1173,6 +1182,9 @@ class FileListActivity : AppCompatActivity() {
         if (currentMode == "recent") {
             currentSortMode = "date"
             isAscending = false
+        } else if (currentMode == "large") {
+            currentSortMode = "size"
+            isAscending = false
         } else {
             currentSortMode = "name"
             isAscending = true
@@ -1205,7 +1217,8 @@ class FileListActivity : AppCompatActivity() {
                     "document" -> repository.getAllDocuments()
                     "app" -> repository.getAllApps()
                     "download" -> repository.getDownloads()
-                "recent" -> repository.getRecentFiles(maxAgeDays = null)
+                    "recent" -> repository.getRecentFiles(maxAgeDays = null)
+                    "large" -> repository.getLargeFiles()
                     else -> repository.getFilesByPath(currentPath)
                 }
                 applySortAndSubmit(applyStorageScopeFilter(rawFiles), isSearchResult = true)
@@ -1221,6 +1234,7 @@ class FileListActivity : AppCompatActivity() {
                 "document" -> repository.getAllDocuments(query)
                 "app" -> repository.getAllApps(query)
                 "recent" -> repository.getRecentFiles(query = query, maxAgeDays = null)
+                "large" -> repository.getLargeFiles(query = query)
                 "download" -> {
                     val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
                     repository.searchRecursive(downloadPath, query)
@@ -1458,6 +1472,7 @@ class FileListActivity : AppCompatActivity() {
                 "document" -> repository.getAllDocuments()
                 "app" -> repository.getAllApps()
                 "download" -> repository.getDownloads()
+                "large" -> repository.getLargeFiles()
                 else -> repository.getFilesByPath(path)
             }
             applySortAndSubmit(applyStorageScopeFilter(rawFiles), isSearchResult = false)

@@ -15,6 +15,10 @@ import java.util.Locale
 import kotlin.math.max
 
 class FileRepository(private val context: Context) {
+    companion object {
+        private const val DEFAULT_LARGE_FILE_MIN_BYTES: Long = 100L * 1024L * 1024L // 100MB
+    }
+
     private val recentComparator = compareByDescending<FileItem> { it.dateModified }
         .thenBy { it.path.lowercase(Locale.ROOT) }
 
@@ -107,6 +111,37 @@ class FileRepository(private val context: Context) {
         }
 
         queryMediaStore(collection, selectionParts.joinToString(" AND "), selectionArgs.toTypedArray(), sortOrder)
+    }
+
+    suspend fun getLargeFiles(
+        query: String? = null,
+        minBytes: Long = DEFAULT_LARGE_FILE_MIN_BYTES
+    ): List<FileItem> = withContext(Dispatchers.IO) {
+        val collection = MediaStore.Files.getContentUri("external")
+        val sortOrder = "${MediaStore.Files.FileColumns.SIZE} DESC"
+        val selectionParts = mutableListOf(
+            "${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL",
+            "${MediaStore.Files.FileColumns.SIZE} >= ?",
+            "(${MediaStore.Files.FileColumns.DATA} IS NULL OR ${MediaStore.Files.FileColumns.DATA} NOT LIKE ?)"
+        )
+        val selectionArgs = mutableListOf(
+            minBytes.toString(),
+            "%/Android/data/%"
+        )
+
+        if (!query.isNullOrBlank()) {
+            selectionParts += "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+            selectionArgs += "%$query%"
+        }
+
+        queryMediaStore(
+            collectionUri = collection,
+            selection = selectionParts.joinToString(" AND "),
+            selectionArgs = selectionArgs.toTypedArray(),
+            sortOrder = sortOrder
+        ).filter { item ->
+            !item.isDirectory && item.size >= minBytes && File(item.path).exists()
+        }
     }
 
     suspend fun getRecentFiles(
