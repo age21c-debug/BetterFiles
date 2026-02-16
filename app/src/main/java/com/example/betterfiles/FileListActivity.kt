@@ -1192,7 +1192,7 @@ class FileListActivity : AppCompatActivity() {
             currentSortMode = "name"
             isAscending = true
         }
-        btnSearchSort.visibility = View.VISIBLE
+        btnSearchSort.visibility = if (currentMode == "large" || currentMode == "duplicate") View.GONE else View.VISIBLE
 
         headerNormal.visibility = View.GONE
         headerSearch.visibility = View.VISIBLE
@@ -1268,7 +1268,7 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun showSortMenu(view: View) {
-        if (currentMode == "recent" && !isSearchMode) return
+        if ((currentMode == "recent" && !isSearchMode) || currentMode == "large" || currentMode == "duplicate") return
 
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_sort, popup.menu)
@@ -1408,7 +1408,7 @@ class FileListActivity : AppCompatActivity() {
             btnNewFolder.visibility = View.VISIBLE
             btnSort.visibility = View.VISIBLE
             btnRecentMore.visibility = View.GONE
-            btnSearchSort.visibility = View.VISIBLE
+            btnSearchSort.visibility = if (currentMode == "large" || currentMode == "duplicate") View.GONE else View.VISIBLE
 
             if (path == rootPath) {
                 tvTitle.text = rootTitle
@@ -1434,6 +1434,11 @@ class FileListActivity : AppCompatActivity() {
             if (mode == "recent") {
                 btnSort.visibility = View.GONE
                 btnRecentMore.visibility = View.VISIBLE
+                btnSearchSort.visibility = View.VISIBLE
+            } else if (mode == "large" || mode == "duplicate") {
+                btnSort.visibility = View.GONE
+                btnRecentMore.visibility = View.GONE
+                btnSearchSort.visibility = View.GONE
             } else {
                 btnSort.visibility = View.VISIBLE
                 btnRecentMore.visibility = View.GONE
