@@ -347,6 +347,75 @@
         </LinearLayout>
 
         <androidx.cardview.widget.CardView
+            android:id="@+id/layoutSelectionDeleteBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_margin="16dp"
+            app:cardCornerRadius="22dp"
+            app:cardElevation="8dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/layoutSelectionDeleteContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="12dp"
+                android:gravity="center_vertical"
+                android:background="#E53935">
+
+                <ImageView
+                    android:id="@+id/ivSelectionDeleteIcon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_delete_trash"
+                    app:tint="#FFFFFF"/>
+
+                <LinearLayout
+                    android:id="@+id/layoutSelectionDeleteCenter"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:orientation="vertical"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/tvSelectionDeleteLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/menu_delete"
+                        android:textColor="#FFFFFF"
+                        android:textStyle="bold"
+                        android:textSize="15sp"/>
+
+                    <TextView
+                        android:id="@+id/tvSelectionDeleteMeta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/selection_total_size_format"
+                        android:textColor="#FFEBEE"
+                        android:textStyle="bold"
+                        android:textSize="13sp"
+                        android:visibility="gone"/>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvSelectionDeleteRight"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="end"
+                    android:text="@string/selection_total_size_format"
+                    android:textColor="#FFEBEE"
+                    android:textStyle="bold"
+                    android:textSize="13sp"/>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <androidx.cardview.widget.CardView
             android:id="@+id/layoutPasteBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

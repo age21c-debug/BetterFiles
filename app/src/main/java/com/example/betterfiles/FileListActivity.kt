@@ -17,6 +17,7 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.Formatter
 import android.util.Size
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.InputMethodManager
@@ -27,6 +28,7 @@ import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupMenu
+import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -166,6 +168,13 @@ class FileListActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
                     drawerLayout.closeDrawer(GravityCompat.START)
+                } else if ((currentMode == "duplicate" || currentMode == "large") && isSelectionMode) {
+                    val hasSelected = adapter.currentList.any { it.isSelected }
+                    if (hasSelected) {
+                        closeSelectionMode()
+                    } else {
+                        handleBackAction()
+                    }
                 } else if (isSelectionMode) {
                     closeSelectionMode()
                 } else if (isSearchMode) {
@@ -819,6 +828,7 @@ class FileListActivity : AppCompatActivity() {
         val btnShareSelection: ImageView = findViewById(R.id.btnShareSelection)
         val btnDeleteSelection: ImageView = findViewById(R.id.btnDeleteSelection)
         val btnSelectionMore: ImageView = findViewById(R.id.btnSelectionMore)
+        val layoutSelectionDeleteBar: CardView = findViewById(R.id.layoutSelectionDeleteBar)
 
         btnCloseSelection.setOnClickListener { closeSelectionMode() }
         btnSelectAll.setOnClickListener { toggleSelectAll() }
@@ -829,6 +839,7 @@ class FileListActivity : AppCompatActivity() {
 
         btnShareSelection.setOnClickListener { shareSelectedFiles() }
         btnDeleteSelection.setOnClickListener { showDeleteSelectionDialog() }
+        layoutSelectionDeleteBar.setOnClickListener { showDeleteSelectionDialog() }
     }
 
     private fun showSelectionMoreMenu(view: View) {
@@ -995,9 +1006,37 @@ class FileListActivity : AppCompatActivity() {
     private fun toggleSelectAll() {
         val currentList = adapter.currentList
         if (currentList.isEmpty()) return
-        val isAllSelected = currentList.all { it.isSelected }
-        val newState = !isAllSelected
-        currentList.forEach { it.isSelected = newState }
+
+        if (currentMode == "duplicate") {
+            val minModifiedByGroup = currentList
+                .asSequence()
+                .mapNotNull { item ->
+                    val key = item.duplicateGroupKey
+                    if (key.isNullOrBlank()) null else key to item.dateModified
+                }
+                .groupBy({ it.first }, { it.second })
+                .mapValues { (_, values) -> values.minOrNull() ?: 0L }
+
+            val selectableItems = currentList.filter { item ->
+                val key = item.duplicateGroupKey
+                if (key.isNullOrBlank()) true else item.dateModified != minModifiedByGroup[key]
+            }
+
+            if (selectableItems.isEmpty()) return
+            val isAllSelected = selectableItems.all { it.isSelected }
+            val newState = !isAllSelected
+
+            currentList.forEach { item ->
+                val key = item.duplicateGroupKey
+                val isOriginal = !key.isNullOrBlank() && item.dateModified == minModifiedByGroup[key]
+                item.isSelected = if (isOriginal) false else newState
+            }
+        } else {
+            val isAllSelected = currentList.all { it.isSelected }
+            val newState = !isAllSelected
+            currentList.forEach { it.isSelected = newState }
+        }
+
         adapter.notifyDataSetChanged()
         updateSelectionUI()
     }
@@ -1013,15 +1052,63 @@ class FileListActivity : AppCompatActivity() {
         findViewById<LinearLayout>(R.id.headerSearch).visibility = View.GONE
         findViewById<LinearLayout>(R.id.headerSelection).visibility = View.VISIBLE
 
+        val btnShareSelection: ImageView = findViewById(R.id.btnShareSelection)
+        val btnDeleteSelection: ImageView = findViewById(R.id.btnDeleteSelection)
+        val btnSelectionMore: ImageView = findViewById(R.id.btnSelectionMore)
+        if (currentMode == "duplicate" || currentMode == "large") {
+            btnShareSelection.visibility = View.GONE
+            btnDeleteSelection.visibility = View.GONE
+            btnSelectionMore.visibility = View.GONE
+        } else {
+            btnShareSelection.visibility = View.VISIBLE
+            btnDeleteSelection.visibility = View.VISIBLE
+            btnSelectionMore.visibility = View.VISIBLE
+        }
+
         updateSelectionUI()
     }
 
+    private fun ensureDuplicateSelectionMode() {
+        if (currentMode != "duplicate" && currentMode != "large") return
+
+        if (!isSelectionMode) {
+            isSelectionMode = true
+            adapter.isSelectionMode = true
+        }
+
+        findViewById<LinearLayout>(R.id.headerSelection).visibility = View.GONE
+        if (isSearchMode) {
+            findViewById<LinearLayout>(R.id.headerSearch).visibility = View.VISIBLE
+            findViewById<LinearLayout>(R.id.headerNormal).visibility = View.GONE
+        } else {
+            findViewById<LinearLayout>(R.id.headerNormal).visibility = View.VISIBLE
+            findViewById<LinearLayout>(R.id.headerSearch).visibility = View.GONE
+        }
+
+        findViewById<ImageView>(R.id.btnShareSelection).visibility = View.GONE
+        findViewById<ImageView>(R.id.btnDeleteSelection).visibility = View.GONE
+        findViewById<ImageView>(R.id.btnSelectionMore).visibility = View.GONE
+        updateSelectionUI()
+    }
     private fun closeSelectionMode() {
+        if (currentMode == "duplicate" || currentMode == "large") {
+            adapter.currentList.forEach { it.isSelected = false }
+            isSelectionMode = true
+            adapter.isSelectionMode = true
+            adapter.notifyDataSetChanged()
+            ensureDuplicateSelectionMode()
+            return
+        }
+
         isSelectionMode = false
         adapter.currentList.forEach { it.isSelected = false }
         adapter.isSelectionMode = false
         adapter.notifyDataSetChanged()
 
+        findViewById<CardView>(R.id.layoutSelectionDeleteBar).visibility = View.GONE
+        findViewById<ImageView>(R.id.btnShareSelection).visibility = View.VISIBLE
+        findViewById<ImageView>(R.id.btnDeleteSelection).visibility = View.VISIBLE
+        findViewById<ImageView>(R.id.btnSelectionMore).visibility = View.VISIBLE
         findViewById<LinearLayout>(R.id.headerSelection).visibility = View.GONE
         if (isSearchMode) {
             findViewById<LinearLayout>(R.id.headerSearch).visibility = View.VISIBLE
@@ -1031,9 +1118,66 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun updateSelectionUI() {
-        val count = adapter.currentList.count { it.isSelected }
+        val selectedItems = adapter.currentList.filter { it.isSelected }
+        val count = selectedItems.size
         val tvSelectionCount: TextView = findViewById(R.id.tvSelectionCount)
         tvSelectionCount.text = getString(R.string.selection_count_format, count)
+
+        if (currentMode == "duplicate" || currentMode == "large") {
+            val totalBytes = selectedItems.sumOf { if (it.isDirectory) 0L else it.size }
+            val totalSize = Formatter.formatFileSize(this, totalBytes)
+            applySelectionDeleteBarPreviewStyle(count, totalSize)
+            findViewById<CardView>(R.id.layoutSelectionDeleteBar).visibility = if (count > 0) View.VISIBLE else View.GONE
+        } else {
+            findViewById<CardView>(R.id.layoutSelectionDeleteBar).visibility = View.GONE
+        }
+    }
+
+    private fun applySelectionDeleteBarPreviewStyle(count: Int, totalSize: String) {
+        val deleteBar: CardView = findViewById(R.id.layoutSelectionDeleteBar)
+        val contentLayout: LinearLayout = findViewById(R.id.layoutSelectionDeleteContent)
+        val centerLayout: LinearLayout = findViewById(R.id.layoutSelectionDeleteCenter)
+        val ivDeleteIcon: ImageView = findViewById(R.id.ivSelectionDeleteIcon)
+        val tvLabel: TextView = findViewById(R.id.tvSelectionDeleteLabel)
+        val tvMeta: TextView = findViewById(R.id.tvSelectionDeleteMeta)
+        val tvRight: TextView = findViewById(R.id.tvSelectionDeleteRight)
+
+        val barParams = deleteBar.layoutParams as RelativeLayout.LayoutParams
+        val centerParams = centerLayout.layoutParams as LinearLayout.LayoutParams
+        val rightParams = tvRight.layoutParams as LinearLayout.LayoutParams
+        val labelParams = tvLabel.layoutParams as LinearLayout.LayoutParams
+        val iconParams = ivDeleteIcon.layoutParams as LinearLayout.LayoutParams
+        val largeIconPx = (24 * resources.displayMetrics.density).toInt()
+
+        iconParams.width = largeIconPx
+        iconParams.height = largeIconPx
+        ivDeleteIcon.layoutParams = iconParams
+
+        barParams.width = RelativeLayout.LayoutParams.WRAP_CONTENT
+        barParams.addRule(RelativeLayout.CENTER_HORIZONTAL, RelativeLayout.TRUE)
+        deleteBar.layoutParams = barParams
+
+        contentLayout.gravity = Gravity.CENTER
+
+        centerParams.width = LinearLayout.LayoutParams.WRAP_CONTENT
+        centerParams.weight = 0f
+        centerLayout.layoutParams = centerParams
+        centerLayout.gravity = Gravity.CENTER
+
+        rightParams.width = 0
+        rightParams.weight = 0f
+        tvRight.layoutParams = rightParams
+        tvRight.visibility = View.GONE
+
+        tvLabel.text = getString(R.string.menu_delete)
+        tvLabel.gravity = Gravity.CENTER
+        tvMeta.visibility = View.VISIBLE
+        tvMeta.gravity = Gravity.CENTER
+        tvMeta.text = getString(R.string.selection_count_and_size_format, count, totalSize)
+
+        val measuredMetaWidth = tvMeta.paint.measureText(tvMeta.text.toString()).toInt()
+        labelParams.width = measuredMetaWidth.coerceAtLeast(tvLabel.measuredWidth)
+        tvLabel.layoutParams = labelParams
     }
 
     private fun showDeleteSelectionDialog() {
@@ -1155,7 +1299,11 @@ class FileListActivity : AppCompatActivity() {
         btnNewFolder.setOnClickListener { showCreateFolderDialog() }
 
         btnSearch.setOnClickListener {
-            enterSearchMode()
+            if (currentMode == "duplicate" || currentMode == "large") {
+                toggleSelectAll()
+            } else {
+                enterSearchMode()
+            }
         }
         btnRecentMore.setOnClickListener { view ->
             showRecentHeaderMenu(view)
@@ -1306,24 +1454,27 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun applySortAndSubmit(files: List<FileItem>, isSearchResult: Boolean = false) {
-        val sortedFiles = files.sortedWith(Comparator { o1, o2 ->
-            if (o1.isDirectory != o2.isDirectory) {
-                return@Comparator if (o1.isDirectory) -1 else 1
-            }
-            if (currentMode == "recent" && !isSearchMode) {
-                val recentCmp = o2.dateModified.compareTo(o1.dateModified)
-                if (recentCmp != 0) return@Comparator recentCmp
-                return@Comparator o1.path.lowercase().compareTo(o2.path.lowercase())
-            }
-            val result = when (currentSortMode) {
-                "name" -> o1.name.lowercase().compareTo(o2.name.lowercase())
-                "size" -> o1.size.compareTo(o2.size)
-                else -> o1.dateModified.compareTo(o2.dateModified)
-            }
-            val ordered = if (isAscending) result else -result
-            if (ordered != 0) ordered else o1.path.lowercase().compareTo(o2.path.lowercase())
-        })
-
+        val sortedFiles = if (currentMode == "duplicate" || currentMode == "large") {
+            files
+        } else {
+            files.sortedWith(Comparator { o1, o2 ->
+                if (o1.isDirectory != o2.isDirectory) {
+                    return@Comparator if (o1.isDirectory) -1 else 1
+                }
+                if (currentMode == "recent" && !isSearchMode) {
+                    val recentCmp = o2.dateModified.compareTo(o1.dateModified)
+                    if (recentCmp != 0) return@Comparator recentCmp
+                    return@Comparator o1.path.lowercase().compareTo(o2.path.lowercase())
+                }
+                val result = when (currentSortMode) {
+                    "name" -> o1.name.lowercase().compareTo(o2.name.lowercase())
+                    "size" -> o1.size.compareTo(o2.size)
+                    else -> o1.dateModified.compareTo(o2.dateModified)
+                }
+                val ordered = if (isAscending) result else -result
+                if (ordered != 0) ordered else o1.path.lowercase().compareTo(o2.path.lowercase())
+            })
+        }
         val rvFiles = findViewById<RecyclerView>(R.id.rvFiles)
         val layoutEmpty = findViewById<LinearLayout>(R.id.layoutEmpty)
         val tvFileCount = findViewById<TextView>(R.id.tvFileCount)
@@ -1356,7 +1507,20 @@ class FileListActivity : AppCompatActivity() {
                 currentMode == "app" ||
                 currentMode == "download"
             adapter.showDateHeaders = supportsDateSections && currentSortMode == "date"
-            adapter.submitList(sortedFiles)
+            adapter.showDuplicateHeaders = currentMode == "duplicate"
+
+            val filesToSubmit = if ((currentMode == "duplicate" || currentMode == "large") && isSelectionMode) {
+                val selectedPaths = adapter.currentList.asSequence()
+                    .filter { it.isSelected }
+                    .map { it.path }
+                    .toHashSet()
+                sortedFiles.onEach { it.isSelected = it.path in selectedPaths }
+            } else {
+                sortedFiles
+            }
+
+            adapter.submitList(filesToSubmit)
+            if (currentMode == "duplicate" || currentMode == "large") ensureDuplicateSelectionMode()
         }
 
         if (isSearchResult) {
@@ -1387,7 +1551,7 @@ class FileListActivity : AppCompatActivity() {
 
     // loadData: ê²½ë¡œ ?ï¿½ì‹œ ï¿?ë¶™ì—¬?ï¿½ê¸° ï¿?UI ê°±ì‹  ?ï¿½ì¶œ
     private fun loadData(mode: String, path: String) {
-        // ?ï¿½ì „ ë¡œë”© ?ï¿½ì—… ì·¨ì†Œ
+        // ÀÌÀü ·Îµù ÀÛ¾÷ Ãë¼Ò
         loadJob?.cancel()
 
         currentMode = mode
@@ -1399,33 +1563,39 @@ class FileListActivity : AppCompatActivity() {
         val btnNewFolder = findViewById<ImageView>(R.id.btnNewFolder)
         val btnSort = findViewById<ImageView>(R.id.btnSort)
         val btnRecentMore = findViewById<ImageView>(R.id.btnRecentMore)
+        val btnSearch = findViewById<ImageView>(R.id.btnSearch)
         val btnSearchSort = findViewById<ImageView>(R.id.btnSearchSort)
 
         val scrollViewPath = findViewById<HorizontalScrollView>(R.id.scrollViewPath)
         val tvPathIndicator = findViewById<TextView>(R.id.tvPathIndicator)
 
+        // ´ë¿ë·®/Áßº¹ È­¸é¿¡¼­´Â »ó´Ü ¿ìÃø ¹öÆ°À» ÀüÃ¼¼±ÅÃÀ¸·Î »ç¿ë
+        if (mode == "duplicate" || mode == "large") {
+            btnSearch.setImageResource(R.drawable.ic_select_all)
+            btnSearch.imageTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#673AB7"))
+        } else {
+            btnSearch.setImageResource(R.drawable.ic_search)
+            btnSearch.imageTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#111111"))
+        }
+
         if (mode == "folder") {
             btnNewFolder.visibility = View.VISIBLE
             btnSort.visibility = View.VISIBLE
             btnRecentMore.visibility = View.GONE
-            btnSearchSort.visibility = if (currentMode == "large" || currentMode == "duplicate") View.GONE else View.VISIBLE
+            btnSearchSort.visibility = if (mode == "large" || mode == "duplicate") View.GONE else View.VISIBLE
 
             if (path == rootPath) {
                 tvTitle.text = rootTitle
-                if (scrollViewPath != null) scrollViewPath.visibility = View.GONE
+                scrollViewPath?.visibility = View.GONE
             } else {
                 tvTitle.text = File(path).name
 
                 if (scrollViewPath != null && tvPathIndicator != null) {
                     scrollViewPath.visibility = View.VISIBLE
-
                     val relativePath = path.removePrefix(rootPath)
                     val displayPath = rootTitle + relativePath.replace("/", " > ")
                     tvPathIndicator.text = displayPath
-
-                    scrollViewPath.post {
-                        scrollViewPath.fullScroll(View.FOCUS_RIGHT)
-                    }
+                    scrollViewPath.post { scrollViewPath.fullScroll(View.FOCUS_RIGHT) }
                 }
             }
         } else {
@@ -1444,7 +1614,7 @@ class FileListActivity : AppCompatActivity() {
                 btnRecentMore.visibility = View.GONE
                 btnSearchSort.visibility = View.VISIBLE
             }
-            if (scrollViewPath != null) scrollViewPath.visibility = View.GONE
+            scrollViewPath?.visibility = View.GONE
         }
 
         updatePasteBarUI()

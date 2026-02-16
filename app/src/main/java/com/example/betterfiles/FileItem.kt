@@ -1,4 +1,4 @@
-package com.example.betterfiles
+﻿package com.example.betterfiles
 
 import android.net.Uri
 import android.os.Parcelable
@@ -12,25 +12,28 @@ import kotlin.math.pow
 
 @Parcelize
 data class FileItem(
-    val id: Long,               // 고유 ID
-    val name: String,           // 파일 이름
-    val path: String,           // 파일 경로
-    val size: Long,             // 크기
-    val dateModified: Long,     // 수정 날짜
-    val mimeType: String,       // 파일 종류 (MIME)
-    val isDirectory: Boolean,   // 폴더 여부
-    val contentUri: Uri?,       // 파일 주소 (Uri)
-    var isSelected: Boolean = false // 체크박스 선택 여부
+    val id: Long,               // 怨좎쑀 ID
+    val name: String,           // ?뚯씪 ?대쫫
+    val path: String,           // ?뚯씪 寃쎈줈
+    val size: Long,             // ?ш린
+    val dateModified: Long,     // ?섏젙 ?좎쭨
+    val mimeType: String,       // ?뚯씪 醫낅쪟 (MIME)
+    val isDirectory: Boolean,   // ?대뜑 ?щ?
+    val contentUri: Uri?,       // ?뚯씪 二쇱냼 (Uri)
+    var isSelected: Boolean = false,
+    val duplicateGroupKey: String? = null,
+    val duplicateGroupCount: Int = 0,
+    val duplicateGroupSavingsBytes: Long = 0L
 ) : Parcelable {
 
-    // 날짜를 보기 좋게 바꾸는 기능 (예: 2024-01-30)
+    // ?좎쭨瑜?蹂닿린 醫뗪쾶 諛붽씀??湲곕뒫 (?? 2024-01-30)
     fun getFormattedDate(): String {
         val date = Date(dateModified * 1000)
         val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         return format.format(date)
     }
 
-    // 용량을 보기 좋게 바꾸는 기능 (예: 5 MB)
+    // ?⑸웾??蹂닿린 醫뗪쾶 諛붽씀??湲곕뒫 (?? 5 MB)
     fun getFormattedSize(): String {
         if (isDirectory) return ""
         if (size <= 0) return "0 B"

@@ -245,7 +245,7 @@ class FileRepository(private val context: Context) {
             return@withContext emptyList()
         }
 
-        val duplicates = mutableListOf<FileItem>()
+        val duplicateGroups = mutableListOf<List<FileItem>>()
         var quickPhaseElapsedMs = 0L
         var quickFingerprintChecks = 0
         var narrowedGroupCount = 0
@@ -263,10 +263,17 @@ class FileRepository(private val context: Context) {
             }
             quickPhaseElapsedMs += (SystemClock.elapsedRealtime() - quickPhaseStartMs)
 
-            val narrowedGroups = quickFingerprintGroups.values.filter { it.size > 1 }
+            val narrowedGroups = quickFingerprintGroups
+                .values
+                .filter { it.size > 1 }
+                .map { groupItems ->
+                    groupItems.sortedBy { it.path.lowercase(Locale.ROOT) }
+                }
             narrowedGroupCount += narrowedGroups.size
-            narrowedGroups.forEach { duplicates.addAll(it) }
+            duplicateGroups.addAll(narrowedGroups)
         }
+
+        val duplicates = buildDuplicateGroupItems(duplicateGroups)
 
         Log.d(
             DUPLICATE_PERF_TAG,
@@ -274,9 +281,7 @@ class FileRepository(private val context: Context) {
         )
 
         val sortStartMs = SystemClock.elapsedRealtime()
-        val sorted = duplicates.sortedWith(
-            compareByDescending<FileItem> { it.size }.thenBy { it.name.lowercase(Locale.ROOT) }
-        )
+        val sorted = duplicates
         val sortElapsedMs = SystemClock.elapsedRealtime() - sortStartMs
         val totalElapsedMs = SystemClock.elapsedRealtime() - totalStartMs
         Log.d(
@@ -385,13 +390,13 @@ class FileRepository(private val context: Context) {
         }
 
         val stage1StartMs = SystemClock.elapsedRealtime()
-        val sizeOnly = sameSizeGroups
-            .flatten()
-            .filter {
+        val sizeOnlyGroups = sameSizeGroups.map { group ->
+            group.filter {
                 val file = File(it.path)
                 file.exists() && !file.isDirectory
-            }
-            .sortedWith(compareByDescending<FileItem> { it.size }.thenBy { it.name.lowercase(Locale.ROOT) })
+            }.sortedBy { it.path.lowercase(Locale.ROOT) }
+        }.filter { it.size > 1 }
+        val sizeOnly = buildDuplicateGroupItems(sizeOnlyGroups)
         val stage1ElapsedMs = SystemClock.elapsedRealtime() - stage1StartMs
         Log.d(
             DUPLICATE_PERF_TAG,
@@ -402,7 +407,7 @@ class FileRepository(private val context: Context) {
             onSizeOnlyReady(sizeOnly)
         }
 
-        val duplicates = mutableListOf<FileItem>()
+        val duplicateGroups = mutableListOf<List<FileItem>>()
         var quickPhaseElapsedMs = 0L
         var quickFingerprintChecks = 0
         var narrowedGroupCount = 0
@@ -420,10 +425,17 @@ class FileRepository(private val context: Context) {
             }
             quickPhaseElapsedMs += (SystemClock.elapsedRealtime() - quickPhaseStartMs)
 
-            val narrowedGroups = quickFingerprintGroups.values.filter { it.size > 1 }
+            val narrowedGroups = quickFingerprintGroups
+                .values
+                .filter { it.size > 1 }
+                .map { groupItems ->
+                    groupItems.sortedBy { it.path.lowercase(Locale.ROOT) }
+                }
             narrowedGroupCount += narrowedGroups.size
-            narrowedGroups.forEach { duplicates.addAll(it) }
+            duplicateGroups.addAll(narrowedGroups)
         }
+
+        val duplicates = buildDuplicateGroupItems(duplicateGroups)
 
         Log.d(
             DUPLICATE_PERF_TAG,
@@ -431,9 +443,7 @@ class FileRepository(private val context: Context) {
         )
 
         val sortStartMs = SystemClock.elapsedRealtime()
-        val sorted = duplicates.sortedWith(
-            compareByDescending<FileItem> { it.size }.thenBy { it.name.lowercase(Locale.ROOT) }
-        )
+        val sorted = duplicates
         val sortElapsedMs = SystemClock.elapsedRealtime() - sortStartMs
         val totalElapsedMs = SystemClock.elapsedRealtime() - totalStartMs
         Log.d(
@@ -711,6 +721,31 @@ class FileRepository(private val context: Context) {
             }
         } catch (e: Exception) { e.printStackTrace() }
         return fileList
+    }
+
+    private fun buildDuplicateGroupItems(groups: List<List<FileItem>>): List<FileItem> {
+        if (groups.isEmpty()) return emptyList()
+
+        val sortedGroups = groups
+            .filter { it.size > 1 }
+            .sortedWith(
+                compareByDescending<List<FileItem>> { it.firstOrNull()?.size ?: 0L }
+                    .thenBy { it.firstOrNull()?.path?.lowercase(Locale.ROOT) ?: "" }
+            )
+
+        val result = ArrayList<FileItem>(sortedGroups.sumOf { it.size })
+        for ((groupIndex, groupItems) in sortedGroups.withIndex()) {
+            val groupKey = "dup-${groupItems.first().size}-${groupIndex}"
+            val groupCount = groupItems.size
+            for (item in groupItems) {
+                result += item.copy(
+                    duplicateGroupKey = groupKey,
+                    duplicateGroupCount = groupCount,
+                    duplicateGroupSavingsBytes = (groupCount - 1L) * item.size
+                )
+            }
+        }
+        return result
     }
 
     private fun computeQuickFingerprint(file: File): String? {
