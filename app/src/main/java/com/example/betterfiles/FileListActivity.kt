@@ -214,13 +214,13 @@ class FileListActivity : AppCompatActivity() {
 
         // 2. ?곷떒 怨좎젙 硫붾돱(?댁옣 硫붾え由? ?ㅼ슫濡쒕뱶) ?꾩씠肄섏쓣 ?뚯깋?쇰줈 ?섎룞 ?ㅼ젙
         val menu = navView.menu
-        val greyColor = Color.parseColor("#757575") // 湲곕낯 ?뚯깋
+        val greyColor = Color.parseColor("#5F6368") // match home category icon tone
 
         val internalItem = menu.findItem(R.id.nav_internal_storage)
         internalItem?.icon?.mutate()?.setTint(greyColor)
 
         val documentItem = menu.findItem(R.id.nav_document)
-        documentItem?.icon?.mutate()?.setTint(greyColor)
+        documentItem?.icon?.mutate()?.clearColorFilter()
 
         val downloadItem = menu.findItem(R.id.nav_download)
         downloadItem?.icon?.mutate()?.setTint(greyColor)

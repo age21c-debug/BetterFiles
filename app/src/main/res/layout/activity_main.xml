@@ -89,7 +89,7 @@
                 <LinearLayout
                     android:id="@+id/btnDocuments"
                     android:layout_width="0dp"
-                    android:layout_height="100dp"
+                    android:layout_height="120dp"
                     android:layout_weight="1"
                     android:layout_marginEnd="4dp"
                     android:background="@drawable/bg_home_tile"
@@ -99,23 +99,23 @@
                     android:orientation="vertical">
 
                     <ImageView
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
                         android:layout_marginBottom="8dp"
-                        android:src="@drawable/ic_file"
-                        app:tint="#5F6368" />
+                        android:src="@drawable/ic_doc_word" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/documents"
-                        android:textStyle="bold" />
+                        android:textStyle="bold"
+                        android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout
                     android:id="@+id/btnDownloads"
                     android:layout_width="0dp"
-                    android:layout_height="100dp"
+                    android:layout_height="120dp"
                     android:layout_weight="1"
                     android:layout_marginStart="4dp"
                     android:layout_marginEnd="4dp"
@@ -126,23 +126,24 @@
                     android:orientation="vertical">
 
                     <ImageView
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
                         android:layout_marginBottom="8dp"
-                        android:src="@android:drawable/stat_sys_download"
+                        android:src="@drawable/ic_download"
                         app:tint="#5F6368" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/downloads"
-                        android:textStyle="bold" />
+                        android:textStyle="bold"
+                        android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout
                     android:id="@+id/btnApps"
                     android:layout_width="0dp"
-                    android:layout_height="100dp"
+                    android:layout_height="120dp"
                     android:layout_weight="1"
                     android:layout_marginStart="4dp"
                     android:background="@drawable/bg_home_tile"
@@ -152,8 +153,8 @@
                     android:orientation="vertical">
 
                     <ImageView
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
                         android:layout_marginBottom="8dp"
                         android:src="@drawable/ic_android"
                         app:tint="#5F6368" />
@@ -162,7 +163,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/apps"
-                        android:textStyle="bold" />
+                        android:textStyle="bold"
+                        android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -175,7 +177,7 @@
                 <LinearLayout
                     android:id="@+id/btnImages"
                     android:layout_width="0dp"
-                    android:layout_height="100dp"
+                    android:layout_height="120dp"
                     android:layout_weight="1"
                     android:layout_marginEnd="4dp"
                     android:background="@drawable/bg_home_tile"
@@ -185,23 +187,24 @@
                     android:orientation="vertical">
 
                     <ImageView
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
                         android:layout_marginBottom="8dp"
-                        android:src="@android:drawable/ic_menu_gallery"
+                        android:src="@drawable/ic_image_file"
                         app:tint="#5F6368" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/images"
-                        android:textStyle="bold" />
+                        android:textStyle="bold"
+                        android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout
                     android:id="@+id/btnVideos"
                     android:layout_width="0dp"
-                    android:layout_height="100dp"
+                    android:layout_height="120dp"
                     android:layout_weight="1"
                     android:layout_marginStart="4dp"
                     android:layout_marginEnd="4dp"
@@ -212,23 +215,24 @@
                     android:orientation="vertical">
 
                     <ImageView
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
                         android:layout_marginBottom="8dp"
-                        android:src="@android:drawable/ic_media_play"
+                        android:src="@drawable/ic_video"
                         app:tint="#5F6368" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/videos"
-                        android:textStyle="bold" />
+                        android:textStyle="bold"
+                        android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout
                     android:id="@+id/btnAudio"
                     android:layout_width="0dp"
-                    android:layout_height="100dp"
+                    android:layout_height="120dp"
                     android:layout_weight="1"
                     android:layout_marginStart="4dp"
                     android:background="@drawable/bg_home_tile"
@@ -238,8 +242,8 @@
                     android:orientation="vertical">
 
                     <ImageView
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
+                        android:layout_width="30dp"
+                        android:layout_height="30dp"
                         android:layout_marginBottom="8dp"
                         android:src="@drawable/ic_audio"
                         app:tint="#5F6368" />
@@ -248,7 +252,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/audio"
-                        android:textStyle="bold" />
+                        android:textStyle="bold"
+                        android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>

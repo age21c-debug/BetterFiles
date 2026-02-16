@@ -155,8 +155,8 @@ class MainActivity : AppCompatActivity() {
     private fun setupHomeDrawer() {
         navViewMain.itemIconTintList = null
         val menu = navViewMain.menu
-        val greyColor = Color.parseColor("#757575")
-        menu.findItem(R.id.nav_document)?.icon?.mutate()?.setTint(greyColor)
+        val greyColor = Color.parseColor("#5F6368")
+        menu.findItem(R.id.nav_document)?.icon?.mutate()?.clearColorFilter()
         menu.findItem(R.id.nav_image)?.icon?.mutate()?.setTint(greyColor)
         menu.findItem(R.id.nav_video)?.icon?.mutate()?.setTint(greyColor)
         menu.findItem(R.id.nav_audio)?.icon?.mutate()?.setTint(greyColor)
