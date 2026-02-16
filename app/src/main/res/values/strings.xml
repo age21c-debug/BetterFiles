@@ -91,6 +91,8 @@
     <string name="date_header_today">Today</string>
     <string name="date_header_yesterday">Yesterday</string>
     <string name="selection_count_format">%1$d selected</string>
+    <string name="selection_total_size_format">Total %1$s</string>
+    <string name="selection_count_and_size_format">%1$d selected · Total %2$s</string>
     <string name="confirm_delete_selected_message">Delete %1$d selected items?</string>
     <string name="deleted_count_format">%1$d items deleted.</string>
     <string name="empty_search_title">No results found</string>
@@ -184,6 +186,8 @@
     <string name="storage_analysis_page_subtitle">Free up space by cleaning unnecessary files.</string>
     <string name="storage_duplicate_cleanup_title">Duplicate File Cleanup</string>
     <string name="storage_duplicate_cleanup_desc">Find and clean files with same name and size.</string>
+    <string name="duplicate_group_header_format">Save %1$s · %2$d items</string>
+    <string name="label_original">Original</string>
     <string name="storage_large_cleanup_title">Large File Cleanup</string>
     <string name="storage_large_cleanup_desc">Find and clean large files quickly.</string>
     <string name="storage_feature_coming_soon">Detailed features will be implemented next.</string>
