@@ -149,6 +149,11 @@
     <string name="renewal_preview_title">메인 리뉴얼 미리보기</string>
     <string name="renewal_preview_subtitle">홈의 카테고리 타이틀을 길게 누르면 예시를 볼 수 있습니다.</string>
     <string name="storage_overview">저장공간</string>
+    <string name="sd_card">SD 카드</string>
+    <string name="storage_other">기타 저장소</string>
+    <string name="details_storage_label">저장소</string>
+    <string name="sd_card_not_available">SD 카드를 사용할 수 없습니다.</string>
+    <string name="sd_card_removed_fallback">SD 카드가 제거되어 내장 메모리로 전환했습니다.</string>
     <string name="quick_actions">빠른 작업</string>
     <string name="apps">앱</string>
     <string name="preview_order_a">순서 A: 저장공간→최근 항목→카테고리</string>

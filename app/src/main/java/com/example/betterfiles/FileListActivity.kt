@@ -50,6 +50,8 @@ import java.util.Date
 import java.util.Locale
 
 class FileListActivity : AppCompatActivity() {
+    private enum class StorageScope { INTERNAL, SD_CARD }
+
     companion object {
         private const val RECENT_INITIAL_BATCH = 120
         private const val MENU_EXCLUDE_RECENT_FOLDER = 9001
@@ -87,6 +89,8 @@ class FileListActivity : AppCompatActivity() {
     private var lastRecentSearchQueryForSortReset: String? = null
     private var isRecentCountLoading: Boolean = false
     private var finishOnSearchBack: Boolean = false
+    private var storageScope: StorageScope = StorageScope.INTERNAL
+    private var hasSdCard: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,7 +108,7 @@ class FileListActivity : AppCompatActivity() {
         currentMode = intent.getStringExtra("mode") ?: "folder"
         val intentPathExtra = intent.getStringExtra("path")
         val intentPath = if (intentPathExtra.isNullOrBlank()) {
-            Environment.getExternalStorageDirectory().absolutePath
+            StorageVolumeHelper.getStorageRoots(this).internalRoot
         } else {
             intentPathExtra
         }
@@ -114,6 +118,7 @@ class FileListActivity : AppCompatActivity() {
         rootPath = intentPath
         currentPath = intentPath
         pasteTargetPath = intentPath
+        hasSdCard = StorageVolumeHelper.hasSdCard(this)
 
         loadSavedSortSettings()
 
@@ -146,6 +151,7 @@ class FileListActivity : AppCompatActivity() {
 
         // 3. ?쒕줈???ㅼ젙
         setupDrawer()
+        updateStorageTabsForMode(currentMode)
 
         // 4. ?대깽???ㅼ젙
         btnBack.setOnClickListener { handleHeaderNavigationClick() }
@@ -173,6 +179,31 @@ class FileListActivity : AppCompatActivity() {
             findViewById<View>(android.R.id.content).post {
                 enterSearchMode()
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val previousHasSd = hasSdCard
+        hasSdCard = StorageVolumeHelper.hasSdCard(this)
+        updateStorageTabsForMode(currentMode)
+        updateDrawerSdVisibility()
+        updateDrawerMenu()
+
+        if (previousHasSd && !hasSdCard && storageScope == StorageScope.SD_CARD) {
+            storageScope = StorageScope.INTERNAL
+            if (currentMode == "folder") {
+                rootTitle = getString(R.string.internal_storage)
+                rootPath = StorageVolumeHelper.getStorageRoots(this).internalRoot
+                currentPath = rootPath
+            }
+            loadData(currentMode, currentPath)
+            Toast.makeText(this, getString(R.string.sd_card_removed_fallback), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (!previousHasSd && hasSdCard) {
+            updateDrawerSdVisibility()
         }
     }
 
@@ -205,12 +236,16 @@ class FileListActivity : AppCompatActivity() {
 
         val recentItem = menu.findItem(R.id.nav_recent)
         recentItem?.icon?.mutate()?.setTint(greyColor)
+        val sdItem = menu.findItem(R.id.nav_sd_card)
+        sdItem?.icon?.mutate()?.setTint(greyColor)
 
         // 3. ?대┃ 由ъ뒪??(湲곗〈 肄붾뱶? ?숈씪)
         navView.setNavigationItemSelectedListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.nav_internal_storage -> {
                     rootTitle = getString(R.string.internal_storage)
+                    rootPath = StorageVolumeHelper.getStorageRoots(this).internalRoot
+                    storageScope = StorageScope.INTERNAL
                     loadData("folder", rootPath)
                 }
                 R.id.nav_document -> {
@@ -237,10 +272,22 @@ class FileListActivity : AppCompatActivity() {
                     rootTitle = getString(R.string.recent_files)
                     loadData("recent", rootPath)
                 }
+                R.id.nav_sd_card -> {
+                    val sdRoot = StorageVolumeHelper.primarySdRoot(this)
+                    if (sdRoot != null) {
+                        rootTitle = getString(R.string.sd_card)
+                        rootPath = sdRoot
+                        storageScope = StorageScope.SD_CARD
+                        loadData("folder", sdRoot)
+                    } else {
+                        Toast.makeText(this, getString(R.string.sd_card_not_available), Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
             drawerLayout.closeDrawer(GravityCompat.START)
             true
         }
+        updateDrawerSdVisibility()
         updateDrawerMenu()
     }
 
@@ -258,7 +305,12 @@ class FileListActivity : AppCompatActivity() {
             favorites.forEachIndexed { index, entry ->
                 val file = File(entry.path)
                 val title = entry.name ?: file.name
-                val item = favoritesGroup.add(0, index + 100, 0, title)
+                val roots = StorageVolumeHelper.getStorageRoots(this)
+                val volumePrefix = when (StorageVolumeHelper.detectVolume(entry.path, roots)) {
+                    StorageVolumeType.SD_CARD -> "[SD] "
+                    else -> ""
+                }
+                val item = favoritesGroup.add(0, index + 100, 0, "$volumePrefix$title")
 
                 if (entry.isDirectory) {
                     // Folder favorite icon tint
@@ -300,6 +352,78 @@ class FileListActivity : AppCompatActivity() {
                         true
                     }
                 }
+            }
+        }
+    }
+
+    private fun updateDrawerSdVisibility() {
+        val menu = navView.menu
+        menu.findItem(R.id.nav_sd_card)?.isVisible = hasSdCard
+    }
+
+    private fun supportsStorageTabs(mode: String): Boolean {
+        return mode == "recent" ||
+            mode == "image" ||
+            mode == "video" ||
+            mode == "audio" ||
+            mode == "document" ||
+            mode == "app"
+    }
+
+    private fun updateStorageTabsForMode(mode: String) {
+        val layoutTabs = findViewById<LinearLayout>(R.id.layoutStorageTabs)
+        val tabInternal = findViewById<TextView>(R.id.tabInternal)
+        val tabSdCard = findViewById<TextView>(R.id.tabSdCard)
+
+        val showTabs = hasSdCard && supportsStorageTabs(mode)
+        layoutTabs.visibility = if (showTabs) View.VISIBLE else View.GONE
+        if (!showTabs) {
+            storageScope = StorageScope.INTERNAL
+            return
+        }
+
+        tabInternal.setOnClickListener {
+            if (storageScope != StorageScope.INTERNAL) {
+                storageScope = StorageScope.INTERNAL
+                updateStorageTabSelectionUI()
+                if (isSearchMode) performSearch(currentSearchQuery) else loadData(currentMode, currentPath)
+            }
+        }
+        tabSdCard.setOnClickListener {
+            if (storageScope != StorageScope.SD_CARD) {
+                storageScope = StorageScope.SD_CARD
+                updateStorageTabSelectionUI()
+                if (isSearchMode) performSearch(currentSearchQuery) else loadData(currentMode, currentPath)
+            }
+        }
+        updateStorageTabSelectionUI()
+    }
+
+    private fun updateStorageTabSelectionUI() {
+        val tabInternal = findViewById<TextView>(R.id.tabInternal)
+        val tabSdCard = findViewById<TextView>(R.id.tabSdCard)
+
+        if (storageScope == StorageScope.INTERNAL) {
+            tabInternal.background = getDrawable(R.drawable.bg_storage_tab_selected)
+            tabInternal.setTextColor(Color.parseColor("#0D47A1"))
+            tabSdCard.background = getDrawable(R.drawable.bg_storage_tab_unselected)
+            tabSdCard.setTextColor(Color.parseColor("#616161"))
+        } else {
+            tabSdCard.background = getDrawable(R.drawable.bg_storage_tab_selected)
+            tabSdCard.setTextColor(Color.parseColor("#0D47A1"))
+            tabInternal.background = getDrawable(R.drawable.bg_storage_tab_unselected)
+            tabInternal.setTextColor(Color.parseColor("#616161"))
+        }
+    }
+
+    private fun applyStorageScopeFilter(files: List<FileItem>): List<FileItem> {
+        if (!hasSdCard || !supportsStorageTabs(currentMode)) return files
+        val roots = StorageVolumeHelper.getStorageRoots(this)
+        return files.filter { item ->
+            when (StorageVolumeHelper.detectVolume(item.path, roots)) {
+                StorageVolumeType.INTERNAL -> storageScope == StorageScope.INTERNAL
+                StorageVolumeType.SD_CARD -> storageScope == StorageScope.SD_CARD
+                StorageVolumeType.OTHER -> false
             }
         }
     }
@@ -1081,10 +1205,10 @@ class FileListActivity : AppCompatActivity() {
                     "document" -> repository.getAllDocuments()
                     "app" -> repository.getAllApps()
                     "download" -> repository.getDownloads()
-                    "recent" -> repository.getRecentFiles(maxAgeDays = null)
+                "recent" -> repository.getRecentFiles(maxAgeDays = null)
                     else -> repository.getFilesByPath(currentPath)
                 }
-                applySortAndSubmit(rawFiles, isSearchResult = true)
+                applySortAndSubmit(applyStorageScopeFilter(rawFiles), isSearchResult = true)
             }
             return
         }
@@ -1104,7 +1228,7 @@ class FileListActivity : AppCompatActivity() {
                 "folder" -> repository.searchRecursive(currentPath, query)
                 else -> repository.searchRecursive(currentPath, query)
             }
-            applySortAndSubmit(results, isSearchResult = true)
+            applySortAndSubmit(applyStorageScopeFilter(results), isSearchResult = true)
         }
     }
 
@@ -1249,6 +1373,7 @@ class FileListActivity : AppCompatActivity() {
         currentMode = mode
         currentPath = path
         pasteTargetPath = if (mode == "folder") path else rootPath
+        updateStorageTabsForMode(mode)
 
         val tvTitle = findViewById<TextView>(R.id.tvPageTitle)
         val btnNewFolder = findViewById<ImageView>(R.id.btnNewFolder)
@@ -1275,7 +1400,7 @@ class FileListActivity : AppCompatActivity() {
                     scrollViewPath.visibility = View.VISIBLE
 
                     val relativePath = path.removePrefix(rootPath)
-                    val displayPath = getString(R.string.internal_storage) + relativePath.replace("/", " > ")
+                    val displayPath = rootTitle + relativePath.replace("/", " > ")
                     tvPathIndicator.text = displayPath
 
                     scrollViewPath.post {
@@ -1309,18 +1434,18 @@ class FileListActivity : AppCompatActivity() {
                 if (initialFiles.isEmpty()) {
                     val fullFallback = repository.getRecentFiles(maxAgeDays = null)
                     isRecentCountLoading = false
-                    applySortAndSubmit(fullFallback, isSearchResult = false)
+                    applySortAndSubmit(applyStorageScopeFilter(fullFallback), isSearchResult = false)
                     return@launch
                 }
 
                 val shouldLoadFull = initialFiles.size >= RECENT_INITIAL_BATCH
                 isRecentCountLoading = shouldLoadFull
-                applySortAndSubmit(initialFiles, isSearchResult = false)
+                applySortAndSubmit(applyStorageScopeFilter(initialFiles), isSearchResult = false)
 
                 if (shouldLoadFull) {
                     val fullFiles = repository.getRecentFiles(maxAgeDays = null)
                     isRecentCountLoading = false
-                    applySortAndSubmit(fullFiles, isSearchResult = false)
+                    applySortAndSubmit(applyStorageScopeFilter(fullFiles), isSearchResult = false)
                 }
                 return@launch
             }
@@ -1335,7 +1460,7 @@ class FileListActivity : AppCompatActivity() {
                 "download" -> repository.getDownloads()
                 else -> repository.getFilesByPath(path)
             }
-            applySortAndSubmit(rawFiles, isSearchResult = false)
+            applySortAndSubmit(applyStorageScopeFilter(rawFiles), isSearchResult = false)
         }
     }
 
@@ -1452,9 +1577,16 @@ class FileListActivity : AppCompatActivity() {
         val tvSize: TextView = view.findViewById(R.id.tvDetailSize)
         val tvDate: TextView = view.findViewById(R.id.tvDetailDate)
         val tvPath: TextView = view.findViewById(R.id.tvDetailPath)
+        val tvStorage: TextView = view.findViewById(R.id.tvDetailStorage)
 
         tvName.text = file.name
         tvPath.text = file.absolutePath
+        val roots = StorageVolumeHelper.getStorageRoots(this)
+        tvStorage.text = when (StorageVolumeHelper.detectVolume(file.absolutePath, roots)) {
+            StorageVolumeType.INTERNAL -> getString(R.string.internal_storage)
+            StorageVolumeType.SD_CARD -> getString(R.string.sd_card)
+            StorageVolumeType.OTHER -> getString(R.string.storage_other)
+        }
 
         val dateFormat = SimpleDateFormat("yyyy. MM. dd. HH:mm", Locale.getDefault())
         tvDate.text = dateFormat.format(Date(file.lastModified()))

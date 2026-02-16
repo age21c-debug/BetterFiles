@@ -36,6 +36,11 @@
             android:id="@+id/nav_internal_storage"
             android:icon="@drawable/ic_phone_storage"
             android:title="@string/internal_storage" />
+
+        <item
+            android:id="@+id/nav_sd_card"
+            android:icon="@android:drawable/stat_notify_sdcard"
+            android:title="@string/sd_card" />
     </group>
 
     <item

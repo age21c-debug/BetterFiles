@@ -149,6 +149,11 @@
     <string name="renewal_preview_title">Main Renewal Preview</string>
     <string name="renewal_preview_subtitle">Long-press the category title on home to open this example.</string>
     <string name="storage_overview">Storage</string>
+    <string name="sd_card">SD Card</string>
+    <string name="storage_other">Other Storage</string>
+    <string name="details_storage_label">Storage</string>
+    <string name="sd_card_not_available">SD card is not available.</string>
+    <string name="sd_card_removed_fallback">SD card was removed. Switched to internal storage.</string>
     <string name="quick_actions">Quick Actions</string>
     <string name="apps">Apps</string>
     <string name="preview_order_a">Order A: Storage→Recent→Category</string>

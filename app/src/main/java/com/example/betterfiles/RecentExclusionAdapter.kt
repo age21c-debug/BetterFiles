@@ -34,14 +34,21 @@ class RecentExclusionAdapter(
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val tvFolderName: TextView = itemView.findViewById(R.id.tvExcludedFolderName)
         private val tvFolderPath: TextView = itemView.findViewById(R.id.tvExcludedFolderPath)
+        private val tvFolderVolume: TextView = itemView.findViewById(R.id.tvExcludedFolderVolume)
         private val btnRemove: ImageView = itemView.findViewById(R.id.btnRemoveExcluded)
 
         fun bind(folderPath: String) {
             val name = File(folderPath).name.ifBlank { folderPath }
             tvFolderName.text = name
             tvFolderPath.text = folderPath
+            val roots = StorageVolumeHelper.getStorageRoots(itemView.context)
+            val volume = when (StorageVolumeHelper.detectVolume(folderPath, roots)) {
+                StorageVolumeType.INTERNAL -> itemView.context.getString(R.string.internal_storage)
+                StorageVolumeType.SD_CARD -> itemView.context.getString(R.string.sd_card)
+                else -> itemView.context.getString(R.string.storage_other)
+            }
+            tvFolderVolume.text = volume
             btnRemove.setOnClickListener { onRemoveClick(folderPath) }
         }
     }
 }
-

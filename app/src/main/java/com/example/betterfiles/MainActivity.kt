@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
         setupHomeDrawer()
 
         val btnInternal: View = findViewById(R.id.btnInternalStorage)
+        val btnSdCard: View = findViewById(R.id.btnSdCardStorage)
         val btnImages: View = findViewById(R.id.btnImages)
         val btnVideos: View = findViewById(R.id.btnVideos)
         val btnAudio: View = findViewById(R.id.btnAudio)
@@ -82,9 +83,22 @@ class MainActivity : AppCompatActivity() {
         btnInternal.setOnClickListener {
             openActivity(
                 mode = "folder",
-                path = Environment.getExternalStorageDirectory().absolutePath,
+                path = StorageVolumeHelper.getStorageRoots(this).internalRoot,
                 title = getString(R.string.internal_storage)
             )
+        }
+
+        btnSdCard.setOnClickListener {
+            val sdRoot = StorageVolumeHelper.primarySdRoot(this)
+            if (sdRoot != null) {
+                openActivity(
+                    mode = "folder",
+                    path = sdRoot,
+                    title = getString(R.string.sd_card)
+                )
+            } else {
+                Toast.makeText(this, getString(R.string.sd_card_not_available), Toast.LENGTH_SHORT).show()
+            }
         }
 
         btnImages.setOnClickListener {
@@ -115,7 +129,7 @@ class MainActivity : AppCompatActivity() {
             openActivity(
                 mode = "recent",
                 title = getString(R.string.recent_files),
-                path = Environment.getExternalStorageDirectory().absolutePath
+                path = StorageVolumeHelper.getStorageRoots(this).internalRoot
             )
         }
 
@@ -127,7 +141,7 @@ class MainActivity : AppCompatActivity() {
             openActivity(
                 mode = "recent",
                 title = getString(R.string.recent_files),
-                path = Environment.getExternalStorageDirectory().absolutePath,
+                path = StorageVolumeHelper.getStorageRoots(this).internalRoot,
                 startSearch = true
             )
         }
@@ -147,6 +161,7 @@ class MainActivity : AppCompatActivity() {
         menu.findItem(R.id.nav_video)?.icon?.mutate()?.setTint(greyColor)
         menu.findItem(R.id.nav_audio)?.icon?.mutate()?.setTint(greyColor)
         menu.findItem(R.id.nav_internal_storage)?.icon?.mutate()?.setTint(greyColor)
+        menu.findItem(R.id.nav_sd_card)?.icon?.mutate()?.setTint(greyColor)
         menu.findItem(R.id.nav_download)?.icon?.mutate()?.setTint(greyColor)
         menu.findItem(R.id.nav_recent)?.icon?.mutate()?.setTint(greyColor)
 
@@ -167,9 +182,21 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_internal_storage -> {
                     openActivity(
                         mode = "folder",
-                        path = Environment.getExternalStorageDirectory().absolutePath,
+                        path = StorageVolumeHelper.getStorageRoots(this).internalRoot,
                         title = getString(R.string.internal_storage)
                     )
+                }
+                R.id.nav_sd_card -> {
+                    val sdRoot = StorageVolumeHelper.primarySdRoot(this)
+                    if (sdRoot != null) {
+                        openActivity(
+                            mode = "folder",
+                            path = sdRoot,
+                            title = getString(R.string.sd_card)
+                        )
+                    } else {
+                        Toast.makeText(this, getString(R.string.sd_card_not_available), Toast.LENGTH_SHORT).show()
+                    }
                 }
                 R.id.nav_download -> {
                     val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
@@ -179,13 +206,14 @@ class MainActivity : AppCompatActivity() {
                     openActivity(
                         mode = "recent",
                         title = getString(R.string.recent_files),
-                        path = Environment.getExternalStorageDirectory().absolutePath
+                        path = StorageVolumeHelper.getStorageRoots(this).internalRoot
                     )
                 }
             }
             drawerLayoutMain.closeDrawer(GravityCompat.START)
             true
         }
+        updateSdEntryVisibility()
         updateHomeDrawerMenu()
     }
 
@@ -204,7 +232,12 @@ class MainActivity : AppCompatActivity() {
         favorites.forEachIndexed { index, entry ->
             val file = File(entry.path)
             val title = entry.name ?: file.name
-            val item = favoritesGroup.add(0, index + 100, 0, title)
+            val roots = StorageVolumeHelper.getStorageRoots(this)
+            val volumePrefix = when (StorageVolumeHelper.detectVolume(entry.path, roots)) {
+                StorageVolumeType.SD_CARD -> "[SD] "
+                else -> ""
+            }
+            val item = favoritesGroup.add(0, index + 100, 0, "$volumePrefix$title")
 
             if (entry.isDirectory) {
                 val drawable = getDrawable(R.drawable.ic_folder_solid)?.mutate()
@@ -278,9 +311,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        updateSdEntryVisibility()
         updatePasteBarUI()
         updateHomeDrawerMenu()
         loadRecentFiles()
+    }
+
+    private fun updateSdEntryVisibility() {
+        val hasSd = StorageVolumeHelper.hasSdCard(this)
+        findViewById<View>(R.id.btnSdCardStorage).visibility = if (hasSd) View.VISIBLE else View.GONE
+        navViewMain.menu.findItem(R.id.nav_sd_card)?.isVisible = hasSd
     }
 
     private fun setupPasteEvents() {
@@ -464,13 +504,14 @@ class MainActivity : AppCompatActivity() {
     private fun openActivity(
         mode: String,
         title: String,
-        path: String = Environment.getExternalStorageDirectory().absolutePath,
+        path: String? = null,
         startSearch: Boolean = false
     ) {
+        val resolvedPath = path ?: StorageVolumeHelper.getStorageRoots(this).internalRoot
         val intent = Intent(this, FileListActivity::class.java)
         intent.putExtra("mode", mode)
         intent.putExtra("title", title)
-        intent.putExtra("path", path)
+        intent.putExtra("path", resolvedPath)
         intent.putExtra("startSearch", startSearch)
         startActivity(intent)
     }

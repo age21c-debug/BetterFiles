@@ -60,7 +60,9 @@ class FileRepository(private val context: Context) {
         val selection = "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ?"
         val selectionArgs = arrayOf("Download/%")
         val sortOrder = "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
+        val roots = StorageVolumeHelper.getStorageRoots(context)
         queryMediaStore(collection, selection, selectionArgs, sortOrder)
+            .filter { StorageVolumeHelper.detectVolume(it.path, roots) == StorageVolumeType.INTERNAL }
     }
 
     // 5. 문서 파일 가져오기 (전체 or 검색)

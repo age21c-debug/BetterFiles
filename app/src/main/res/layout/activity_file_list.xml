@@ -264,6 +264,43 @@
 
             </FrameLayout>
 
+            <LinearLayout
+                android:id="@+id/layoutStorageTabs"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tabInternal"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:paddingVertical="8dp"
+                    android:text="@string/internal_storage"
+                    android:textStyle="bold"
+                    android:textColor="#0D47A1"
+                    android:background="@drawable/bg_storage_tab_selected" />
+
+                <TextView
+                    android:id="@+id/tabSdCard"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:gravity="center"
+                    android:paddingVertical="8dp"
+                    android:text="@string/sd_card"
+                    android:textStyle="bold"
+                    android:textColor="#616161"
+                    android:background="@drawable/bg_storage_tab_unselected" />
+            </LinearLayout>
+
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rvFiles"
                 android:layout_width="match_parent"
