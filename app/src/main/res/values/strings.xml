@@ -172,6 +172,20 @@
     <string name="recent_exclusion_removed">Folder was removed from exclusions.</string>
     <string name="action_remove">Remove</string>
     <string name="recent_exclusion_selection_result">Newly excluded %1$d, already excluded %2$d</string>
+    <string name="storage_analysis_title">Storage Analysis</string>
+    <string name="storage_analysis_usage_placeholder">Loading usage information...</string>
+    <string name="storage_analysis_usage_format">%1$s of %2$s used</string>
+    <string name="storage_analysis_percent_format">%1$d%%</string>
+    <string name="storage_capacity_gb_format">%1$d GB</string>
+    <string name="storage_capacity_tb_format">%1$d TB</string>
+    <string name="storage_analysis_hint">Tap to open storage analysis screen</string>
+    <string name="storage_analysis_page_title">Storage Analysis</string>
+    <string name="storage_analysis_page_subtitle">Free up space by cleaning unnecessary files.</string>
+    <string name="storage_duplicate_cleanup_title">Duplicate File Cleanup</string>
+    <string name="storage_duplicate_cleanup_desc">Find and clean files with same name and size.</string>
+    <string name="storage_large_cleanup_title">Large File Cleanup</string>
+    <string name="storage_large_cleanup_desc">Find and clean large files quickly.</string>
+    <string name="storage_feature_coming_soon">Detailed features will be implemented next.</string>
 </resources>
 
 

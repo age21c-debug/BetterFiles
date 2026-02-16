@@ -7,8 +7,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.StatFs
 import android.provider.Settings
 import android.text.format.DateUtils
+import android.text.format.Formatter
 import android.graphics.Color
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -73,6 +75,7 @@ class MainActivity : AppCompatActivity() {
         val btnApps: View = findViewById(R.id.btnApps)
         val btnMainMenu: View = findViewById(R.id.btnMainMenu)
         val btnHomeSearch: View = findViewById(R.id.btnHomeSearch)
+        val cardStorageAnalysis: View = findViewById(R.id.cardStorageAnalysis)
         val tvRecentSeeAll: TextView = findViewById(R.id.tvRecentSeeAll)
         val tvCategoryTitle: TextView = findViewById(R.id.tvCategoryTitle)
 
@@ -135,6 +138,10 @@ class MainActivity : AppCompatActivity() {
 
         btnMainMenu.setOnClickListener {
             drawerLayoutMain.openDrawer(GravityCompat.START)
+        }
+
+        cardStorageAnalysis.setOnClickListener {
+            startActivity(Intent(this, StorageAnalysisActivity::class.java))
         }
 
         btnHomeSearch.setOnClickListener {
@@ -315,6 +322,61 @@ class MainActivity : AppCompatActivity() {
         updatePasteBarUI()
         updateHomeDrawerMenu()
         loadRecentFiles()
+        bindStorageAnalysisCard()
+    }
+
+    private fun bindStorageAnalysisCard() {
+        val usageText: TextView = findViewById(R.id.tvStorageUsage)
+        val usagePercentText: TextView = findViewById(R.id.tvStorageUsagePercent)
+        val progress: android.widget.ProgressBar = findViewById(R.id.pbStorageAnalysis)
+
+        try {
+            // Use /data partition stats so "used" includes app/system data similarly to storage settings.
+            val statFs = StatFs(Environment.getDataDirectory().absolutePath)
+            val available = statFs.availableBytes
+            val totalData = statFs.totalBytes
+
+            // Match common OEM/file-app display: market capacity (e.g., 256 GB) - current available.
+            val marketTotalBytes = estimateMarketTotalBytes(totalData)
+            val used = (marketTotalBytes - available).coerceAtLeast(0L)
+            val usedPercent = if (marketTotalBytes > 0L) ((used * 100) / marketTotalBytes).toInt() else 0
+
+            val usedText = Formatter.formatFileSize(this, used)
+            val totalText = formatMarketCapacity(marketTotalBytes)
+            usageText.text = getString(R.string.storage_analysis_usage_format, usedText, totalText)
+            usagePercentText.text = getString(R.string.storage_analysis_percent_format, usedPercent)
+            progress.progress = usedPercent.coerceIn(0, 100)
+        } catch (_: Exception) {
+            usageText.text = getString(R.string.storage_analysis_usage_placeholder)
+            usagePercentText.text = getString(R.string.storage_analysis_percent_format, 0)
+            progress.progress = 0
+        }
+    }
+
+    private fun estimateMarketTotalBytes(totalBytes: Long): Long {
+        if (totalBytes <= 0L) return totalBytes
+        val gbDecimal = totalBytes / 1_000_000_000.0
+        val standardCapacitiesGb = doubleArrayOf(
+            16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0, 2048.0
+        )
+        val nearest = standardCapacitiesGb.minByOrNull { kotlin.math.abs(it - gbDecimal) } ?: gbDecimal
+        return (nearest * 1_000_000_000.0).toLong()
+    }
+
+    private fun formatMarketCapacity(totalBytes: Long): String {
+        if (totalBytes <= 0L) return Formatter.formatFileSize(this, totalBytes)
+
+        val gbDecimal = totalBytes / 1_000_000_000.0
+        val standardCapacitiesGb = doubleArrayOf(
+            16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0, 2048.0
+        )
+        val nearest = standardCapacitiesGb.minByOrNull { kotlin.math.abs(it - gbDecimal) } ?: gbDecimal
+        return if (nearest >= 1024.0) {
+            val tb = (nearest / 1024.0).toInt()
+            getString(R.string.storage_capacity_tb_format, tb)
+        } else {
+            getString(R.string.storage_capacity_gb_format, nearest.toInt())
+        }
     }
 
     private fun updateSdEntryVisibility() {

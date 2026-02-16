@@ -1,4 +1,4 @@
-﻿package com.example.betterfiles
+package com.example.betterfiles
 
 import android.app.AlertDialog
 import android.content.Context
@@ -7,7 +7,7 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.media.MediaScannerConnection // [蹂듦뎄?? ??以꾩씠 鍮좎졇???먮윭媛 ?ъ뒿?덈떎
+import android.media.MediaScannerConnection // [복구?? ??줄이 빠져???�러가 ?�습?�다
 import android.media.ThumbnailUtils
 import android.net.Uri
 import android.os.Build
@@ -122,7 +122,7 @@ class FileListActivity : AppCompatActivity() {
 
         loadSavedSortSettings()
 
-        // 2. ?대뙌???ㅼ젙
+        // 2. ?�댑???�정
         adapter = FileAdapter(
             onClick = { fileItem ->
                 if (fileItem.isDirectory) {
@@ -149,11 +149,11 @@ class FileListActivity : AppCompatActivity() {
         rvFiles.layoutManager = LinearLayoutManager(this)
         rvFiles.adapter = adapter
 
-        // 3. ?쒕줈???ㅼ젙
+        // 3. ?�로???�정
         setupDrawer()
         updateStorageTabsForMode(currentMode)
 
-        // 4. ?대깽???ㅼ젙
+        // 4. ?�벤???�정
         btnBack.setOnClickListener { handleHeaderNavigationClick() }
         setupHeaderEvents()
         setupSelectionEvents()
@@ -207,12 +207,12 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // ?쇄뼹???쒕줈??利먭꺼李얘린) 愿??濡쒖쭅 ?쇄뼹??
+    // ?�▼???�로??즐겨찾기) 관??로직 ?�▼??
     private fun setupDrawer() {
-        // 1. 湲곕낯 ?댄듃(?됱긽 ??뼱?곌린) ?쒓굅 -> ?곕━媛 ?먰븯?????몃??? ?몃꽕???????쒖떆?섍린 ?꾪븿
+        // 1. 기본 ?�트(?�상 ??��?�기) ?�거 -> ?�리가 ?�하?????��??? ?�네???????�시?�기 ?�함
         navView.itemIconTintList = null
 
-        // 2. ?곷떒 怨좎젙 硫붾돱(?댁옣 硫붾え由? ?ㅼ슫濡쒕뱶) ?꾩씠肄섏쓣 ?뚯깋?쇰줈 ?섎룞 ?ㅼ젙
+        // 2. ?�단 고정 메뉴(?�장 메모�? ?�운로드) ?�이콘을 ?�색?�로 ?�동 ?�정
         val menu = navView.menu
         val greyColor = Color.parseColor("#5F6368") // match home category icon tone
 
@@ -239,7 +239,7 @@ class FileListActivity : AppCompatActivity() {
         val sdItem = menu.findItem(R.id.nav_sd_card)
         sdItem?.icon?.mutate()?.setTint(greyColor)
 
-        // 3. ?대┃ 由ъ뒪??(湲곗〈 肄붾뱶? ?숈씪)
+        // 3. ?�릭 리스??(기존 코드?�??�일)
         navView.setNavigationItemSelectedListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.nav_internal_storage -> {
@@ -315,7 +315,7 @@ class FileListActivity : AppCompatActivity() {
                 if (entry.isDirectory) {
                     // Folder favorite icon tint
                     val drawable = getDrawable(R.drawable.ic_folder_solid)?.mutate()
-                    drawable?.setTint(Color.parseColor("#FFC107")) // ?몃????곸슜
+                    drawable?.setTint(Color.parseColor("#FFC107")) // ?��????�용
                     item.icon = drawable
 
                     item.setOnMenuItemClickListener {
@@ -324,20 +324,20 @@ class FileListActivity : AppCompatActivity() {
                         true
                     }
                 } else {
-                    // [?뚯씪] ?곗꽑 湲곕낯 ?꾩씠肄?諛??됱긽 ?ㅼ젙
+                    // [?�일] ?�선 기본 ?�이�?�??�상 ?�정
                     val iconRes = getFileIconResource(file.name)
                     val iconColor = getFileIconColor(file.name) ?: Color.GRAY
                     val drawable = getDrawable(iconRes)?.mutate()
                     drawable?.setTint(iconColor)
                     item.icon = drawable
 
-                    // [異붽??? ?몃꽕?? ?대?吏/鍮꾨뵒?ㅻ뒗 鍮꾨룞湲곕줈 濡쒕뵫?섏뿬 ?꾩씠肄?援먯껜
+                    // [추�??? ?�네?? ?��?지/비디?�는 비동기로 로딩?�여 ?�이�?교체
                     if (isImageFile(file.name) || isVideoFile(file.name)) {
                         lifecycleScope.launch(Dispatchers.IO) {
-                            val thumbnail = loadThumbnail(file) // ?꾨옒??異붽????⑥닔 ?몄텧
+                            val thumbnail = loadThumbnail(file) // ?�래??추�????�수 ?�출
                             if (thumbnail != null) {
                                 withContext(Dispatchers.Main) {
-                                    // ?κ렐 紐⑥꽌由??몃꽕???앹꽦
+                                    // ?�근 모서�??�네???�성
                                     val roundedDrawable = RoundedBitmapDrawableFactory.create(resources, thumbnail)
                                     roundedDrawable.cornerRadius = 16f
                                     item.icon = roundedDrawable
@@ -428,15 +428,15 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // [異붽?] ?몃꽕??濡쒕뵫 ?⑥닔
-    // [異붽?] ?몃꽕??濡쒕뵫 ?ы띁 ?⑥닔
+    // [추�?] ?�네??로딩 ?�수
+    // [추�?] ?�네??로딩 ?�퍼 ?�수
     private fun loadThumbnail(file: File): Bitmap? {
         return try {
-            val size = Size(144, 144) // 硫붾돱 ?꾩씠肄섏뿉 ?곷떦???ш린
+            val size = Size(144, 144) // 메뉴 ?�이콘에 ?�당???�기
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ThumbnailUtils.createImageThumbnail(file, size, null)
             } else {
-                // 援щ쾭???명솚 (媛꾨떒??鍮꾪듃留??붿퐫??
+                // 구버???�환 (간단??비트�??�코??
                 val options = BitmapFactory.Options().apply { inSampleSize = 4 }
                 if (isVideoFile(file.name)) {
                     ThumbnailUtils.createVideoThumbnail(file.absolutePath, android.provider.MediaStore.Video.Thumbnails.MINI_KIND)
@@ -465,7 +465,7 @@ class FileListActivity : AppCompatActivity() {
             btnBack.setImageResource(R.drawable.ic_arrow_back)
         }
     }
-    // ?꿎뼯???쒕줈??濡쒖쭅 ???꿎뼯??
+    // ?�▲???�로??로직 ???�▲??
 
     private fun handleFileClick(fileItem: FileItem) {
         val file = File(fileItem.path)
@@ -476,7 +476,7 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // [?⑥닔 1] 硫붿씤 由ъ뒪?몄뿉???대┃ ??(FileItem ?ъ슜)
+    // [?�수 1] 메인 리스?�에???�릭 ??(FileItem ?�용)
     private fun openFile(fileItem: FileItem) {
         try {
             val file = File(fileItem.path)
@@ -491,7 +491,7 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // [?⑥닔 2] 利먭꺼李얘린 ?깆뿉???뚯씪 寃쎈줈留뚯쑝濡??ㅽ뻾 (File ?ъ슜)
+    // [?�수 2] 즐겨찾기 ?�에???�일 경로만으�??�행 (File ?�용)
     private fun openFile(file: File) {
         try {
             val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
@@ -507,7 +507,7 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // [?꾩닔] ?뚯씪 ?뺤옣?먮줈 MIME Type 李얘린
+    // [?�수] ?�일 ?�장?�로 MIME Type 찾기
     private fun getMimeType(file: File): String {
         val extension = file.extension.lowercase(Locale.getDefault())
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
@@ -1098,7 +1098,7 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // --- ?뺣젹, 寃?? ?곗씠??濡쒕뱶 ---
+    // --- ?�렬, 검?? ?�이??로드 ---
     private fun loadSavedSortSettings() {
         if (currentMode == "recent") {
             currentSortMode = "date"
@@ -1365,9 +1365,9 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // loadData: 寃쎈줈 ?쒖떆 諛?遺숈뿬?ｊ린 諛?UI 媛깆떊 ?몄텧
+    // loadData: 경로 ?�시 �?붙여?�기 �?UI 갱신 ?�출
     private fun loadData(mode: String, path: String) {
-        // ?댁쟾 濡쒕뵫 ?묒뾽 痍⑥냼
+        // ?�전 로딩 ?�업 취소
         loadJob?.cancel()
 
         currentMode = mode
@@ -1424,10 +1424,10 @@ class FileListActivity : AppCompatActivity() {
 
         updatePasteBarUI()
 
-        // [異붽?] ?ㅻ뜑 ?꾩씠肄?媛깆떊 (?꾨쾭嫄?<-> ?ㅻ줈媛湲?
+        // [추�?] ?�더 ?�이�?갱신 (?�버�?<-> ?�로가�?
         updateHeaderIcon()
 
-        // ?덈줈??濡쒕뵫 ?묒뾽 ?쒖옉
+        // ?�로??로딩 ?�업 ?�작
         loadJob = lifecycleScope.launch {
             if (mode == "recent") {
                 val initialFiles = repository.getRecentFiles(limit = RECENT_INITIAL_BATCH, maxAgeDays = null)
@@ -1464,16 +1464,16 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // [?섏젙?? 媛쒕퀎 ?뚯씪 硫붾돱 ?듭뀡 ?몃뱾??
+    // [?�정?? 개별 ?�일 메뉴 ?�션 ?�들??
     private fun showFileOptionMenu(view: View, fileItem: FileItem) {
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_file_item, popup.menu)
 
-        // 利먭꺼李얘린 硫붾돱 ?ㅼ젙
+        // 즐겨찾기 메뉴 ?�정
         val favItem = popup.menu.findItem(R.id.action_favorite)
         val isFav = FavoritesManager.isFavorite(this, fileItem)
 
-        // [蹂寃? ?대뜑/?뚯씪 援щ텇 ?놁씠 利먭꺼李얘린 硫붾돱 ?쒖꽦??
+        // [변�? ?�더/?�일 구분 ?�이 즐겨찾기 메뉴 ?�성??
         favItem.isVisible = true
         favItem.title = if (isFav) getString(R.string.favorite_remove) else getString(R.string.menu_favorite_add)
 
