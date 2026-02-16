@@ -179,6 +179,7 @@
     <string name="storage_capacity_gb_format">%1$d GB</string>
     <string name="storage_capacity_tb_format">%1$d TB</string>
     <string name="storage_analysis_hint">Tap to open storage analysis screen</string>
+    <string name="storage_analysis_scope_internal">Internal storage</string>
     <string name="storage_analysis_page_title">Storage Analysis</string>
     <string name="storage_analysis_page_subtitle">Free up space by cleaning unnecessary files.</string>
     <string name="storage_duplicate_cleanup_title">Duplicate File Cleanup</string>

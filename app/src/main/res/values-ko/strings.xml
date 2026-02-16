@@ -172,13 +172,14 @@
     <string name="recent_exclusion_removed">폴더 제외가 해제되었습니다.</string>
     <string name="action_remove">해제</string>
     <string name="recent_exclusion_selection_result">새로 제외됨 %1$d개 · 이미 제외됨 %2$d개</string>
-    <string name="storage_analysis_title">저장소 분석</string>
+    <string name="storage_analysis_title">저장공간 분석</string>
     <string name="storage_analysis_usage_placeholder">사용량 정보를 불러오는 중...</string>
     <string name="storage_analysis_usage_format">%1$s / %2$s 사용 중</string>
     <string name="storage_analysis_percent_format">%1$d%%</string>
     <string name="storage_capacity_gb_format">%1$d GB</string>
     <string name="storage_capacity_tb_format">%1$d TB</string>
     <string name="storage_analysis_hint">탭하여 저장공간 분석 화면으로 이동</string>
+    <string name="storage_analysis_scope_internal">내장 메모리</string>
     <string name="storage_analysis_page_title">저장공간 분석</string>
     <string name="storage_analysis_page_subtitle">불필요한 파일을 정리해 저장공간을 확보하세요.</string>
     <string name="storage_duplicate_cleanup_title">중복 파일 정리</string>
