@@ -13,6 +13,7 @@ import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import java.io.File
@@ -38,9 +39,39 @@ class FileAdapter(
     val currentList: List<FileItem>
         get() = files
 
+    init {
+        setHasStableIds(true)
+    }
+
     fun submitList(newFiles: List<FileItem>) {
+        val oldFiles = files
+        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize(): Int = oldFiles.size
+            override fun getNewListSize(): Int = newFiles.size
+
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                val oldItem = oldFiles[oldItemPosition]
+                val newItem = newFiles[newItemPosition]
+                return oldItem.path == newItem.path
+            }
+
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                val oldItem = oldFiles[oldItemPosition]
+                val newItem = newFiles[newItemPosition]
+                return oldItem.name == newItem.name &&
+                    oldItem.size == newItem.size &&
+                    oldItem.dateModified == newItem.dateModified &&
+                    oldItem.mimeType == newItem.mimeType &&
+                    oldItem.isDirectory == newItem.isDirectory &&
+                    oldItem.isSelected == newItem.isSelected
+            }
+        }, true)
         files = newFiles
-        notifyDataSetChanged()
+        diffResult.dispatchUpdatesTo(this)
+    }
+
+    override fun getItemId(position: Int): Long {
+        return files[position].path.hashCode().toLong()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): FileViewHolder {

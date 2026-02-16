@@ -2,7 +2,6 @@ package com.example.betterfiles
 
 import android.os.Bundle
 import android.widget.ImageView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import android.content.Intent
@@ -15,7 +14,13 @@ class StorageAnalysisActivity : AppCompatActivity() {
         findViewById<ImageView>(R.id.btnBackStorageAnalysis).setOnClickListener { finish() }
 
         findViewById<CardView>(R.id.cardDuplicateCleanup).setOnClickListener {
-            Toast.makeText(this, getString(R.string.storage_feature_coming_soon), Toast.LENGTH_SHORT).show()
+            startActivity(
+                Intent(this, FileListActivity::class.java).apply {
+                    putExtra("mode", "duplicate")
+                    putExtra("title", getString(R.string.storage_duplicate_cleanup_title))
+                    putExtra("path", StorageVolumeHelper.getStorageRoots(this@StorageAnalysisActivity).internalRoot)
+                }
+            )
         }
         findViewById<CardView>(R.id.cardLargeFileCleanup).setOnClickListener {
             startActivity(

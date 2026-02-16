@@ -4,19 +4,25 @@ import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
+import android.os.SystemClock
 import android.provider.MediaStore
+import android.util.Log
 import android.webkit.MimeTypeMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.RandomAccessFile
+import java.security.MessageDigest
 import java.util.Locale
 import kotlin.math.max
 
 class FileRepository(private val context: Context) {
     companion object {
         private const val DEFAULT_LARGE_FILE_MIN_BYTES: Long = 100L * 1024L * 1024L // 100MB
+        private const val QUICK_FINGERPRINT_CHUNK_BYTES = 64 * 1024
+        private const val DUPLICATE_PERF_TAG = "DuplicatePerf"
     }
 
     private val recentComparator = compareByDescending<FileItem> { it.dateModified }
@@ -142,6 +148,299 @@ class FileRepository(private val context: Context) {
         ).filter { item ->
             !item.isDirectory && item.size >= minBytes && File(item.path).exists()
         }
+    }
+
+    suspend fun getDuplicateFiles(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
+        val totalStartMs = SystemClock.elapsedRealtime()
+        val collection = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns._ID,
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.DATA,
+            MediaStore.Files.FileColumns.RELATIVE_PATH,
+            MediaStore.Files.FileColumns.SIZE,
+            MediaStore.Files.FileColumns.DATE_MODIFIED,
+            MediaStore.Files.FileColumns.MIME_TYPE
+        )
+
+        val selectionParts = mutableListOf(
+            "${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL",
+            "${MediaStore.Files.FileColumns.SIZE} > 0",
+            "(${MediaStore.Files.FileColumns.DATA} IS NULL OR ${MediaStore.Files.FileColumns.DATA} NOT LIKE ?)"
+        )
+        val selectionArgs = mutableListOf("%/Android/data/%")
+        if (!query.isNullOrBlank()) {
+            selectionParts += "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+            selectionArgs += "%$query%"
+        }
+
+        val candidates = mutableListOf<FileItem>()
+        val queryStartMs = SystemClock.elapsedRealtime()
+        try {
+            context.contentResolver.query(
+                collection,
+                projection,
+                selectionParts.joinToString(" AND "),
+                selectionArgs.toTypedArray(),
+                "${MediaStore.Files.FileColumns.SIZE} DESC"
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
+                val pathCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA)
+                val relativePathCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.RELATIVE_PATH)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_MODIFIED)
+                val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE)
+
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(nameCol) ?: continue
+                    val dataPath = if (pathCol >= 0) cursor.getString(pathCol) else null
+                    val relativePath = if (relativePathCol >= 0) cursor.getString(relativePathCol) else null
+                    val path = when {
+                        !dataPath.isNullOrBlank() -> dataPath
+                        !relativePath.isNullOrBlank() ->
+                            File(Environment.getExternalStorageDirectory(), relativePath).resolve(name).absolutePath
+                        else -> continue
+                    }
+                    if (path.contains("${File.separator}Android${File.separator}data${File.separator}", ignoreCase = true)) {
+                        continue
+                    }
+
+                    candidates += FileItem(
+                        id = cursor.getLong(idCol),
+                        name = name,
+                        path = path,
+                        size = cursor.getLong(sizeCol),
+                        dateModified = cursor.getLong(dateCol),
+                        mimeType = cursor.getString(mimeCol) ?: "application/octet-stream",
+                        isDirectory = false,
+                        contentUri = ContentUris.withAppendedId(collection, cursor.getLong(idCol))
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(DUPLICATE_PERF_TAG, "query_failed", e)
+            e.printStackTrace()
+            return@withContext emptyList()
+        }
+        val queryElapsedMs = SystemClock.elapsedRealtime() - queryStartMs
+        Log.d(
+            DUPLICATE_PERF_TAG,
+            "phase=query elapsedMs=$queryElapsedMs candidates=${candidates.size} query=${query ?: "<none>"}"
+        )
+
+        val groupStartMs = SystemClock.elapsedRealtime()
+        val sameSizeGroups = candidates.groupBy { it.size }.values.filter { it.size > 1 }
+        val groupingElapsedMs = SystemClock.elapsedRealtime() - groupStartMs
+        val groupedCandidateCount = sameSizeGroups.sumOf { it.size }
+        Log.d(
+            DUPLICATE_PERF_TAG,
+            "phase=group_by_size elapsedMs=$groupingElapsedMs groups=${sameSizeGroups.size} groupedCandidates=$groupedCandidateCount"
+        )
+        if (sameSizeGroups.isEmpty()) {
+            Log.d(
+                DUPLICATE_PERF_TAG,
+                "phase=done elapsedMs=${SystemClock.elapsedRealtime() - totalStartMs} duplicates=0"
+            )
+            return@withContext emptyList()
+        }
+
+        val duplicates = mutableListOf<FileItem>()
+        var quickPhaseElapsedMs = 0L
+        var quickFingerprintChecks = 0
+        var narrowedGroupCount = 0
+        for (group in sameSizeGroups) {
+            currentCoroutineContext().ensureActive()
+
+            val quickPhaseStartMs = SystemClock.elapsedRealtime()
+            val quickFingerprintGroups = LinkedHashMap<String, MutableList<FileItem>>()
+            for (item in group) {
+                quickFingerprintChecks++
+                val file = File(item.path)
+                if (!file.exists() || file.isDirectory) continue
+                val quickFingerprint = computeQuickFingerprint(file) ?: continue
+                quickFingerprintGroups.getOrPut(quickFingerprint) { mutableListOf() }.add(item)
+            }
+            quickPhaseElapsedMs += (SystemClock.elapsedRealtime() - quickPhaseStartMs)
+
+            val narrowedGroups = quickFingerprintGroups.values.filter { it.size > 1 }
+            narrowedGroupCount += narrowedGroups.size
+            narrowedGroups.forEach { duplicates.addAll(it) }
+        }
+
+        Log.d(
+            DUPLICATE_PERF_TAG,
+            "phase=hash elapsedQuickMs=$quickPhaseElapsedMs quickChecks=$quickFingerprintChecks narrowedGroups=$narrowedGroupCount fullHashSkipped=true duplicateHits=${duplicates.size}"
+        )
+
+        val sortStartMs = SystemClock.elapsedRealtime()
+        val sorted = duplicates.sortedWith(
+            compareByDescending<FileItem> { it.size }.thenBy { it.name.lowercase(Locale.ROOT) }
+        )
+        val sortElapsedMs = SystemClock.elapsedRealtime() - sortStartMs
+        val totalElapsedMs = SystemClock.elapsedRealtime() - totalStartMs
+        Log.d(
+            DUPLICATE_PERF_TAG,
+            "phase=done elapsedSortMs=$sortElapsedMs totalElapsedMs=$totalElapsedMs result=${sorted.size}"
+        )
+        sorted
+    }
+
+    suspend fun getDuplicateFilesProgressive(
+        query: String? = null,
+        onSizeOnlyReady: suspend (List<FileItem>) -> Unit
+    ): List<FileItem> = withContext(Dispatchers.IO) {
+        val totalStartMs = SystemClock.elapsedRealtime()
+        val collection = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns._ID,
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.DATA,
+            MediaStore.Files.FileColumns.RELATIVE_PATH,
+            MediaStore.Files.FileColumns.SIZE,
+            MediaStore.Files.FileColumns.DATE_MODIFIED,
+            MediaStore.Files.FileColumns.MIME_TYPE
+        )
+
+        val selectionParts = mutableListOf(
+            "${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL",
+            "${MediaStore.Files.FileColumns.SIZE} > 0",
+            "(${MediaStore.Files.FileColumns.DATA} IS NULL OR ${MediaStore.Files.FileColumns.DATA} NOT LIKE ?)"
+        )
+        val selectionArgs = mutableListOf("%/Android/data/%")
+        if (!query.isNullOrBlank()) {
+            selectionParts += "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+            selectionArgs += "%$query%"
+        }
+
+        val candidates = mutableListOf<FileItem>()
+        val queryStartMs = SystemClock.elapsedRealtime()
+        try {
+            context.contentResolver.query(
+                collection,
+                projection,
+                selectionParts.joinToString(" AND "),
+                selectionArgs.toTypedArray(),
+                "${MediaStore.Files.FileColumns.SIZE} DESC"
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
+                val pathCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA)
+                val relativePathCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.RELATIVE_PATH)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_MODIFIED)
+                val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE)
+
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(nameCol) ?: continue
+                    val dataPath = if (pathCol >= 0) cursor.getString(pathCol) else null
+                    val relativePath = if (relativePathCol >= 0) cursor.getString(relativePathCol) else null
+                    val path = when {
+                        !dataPath.isNullOrBlank() -> dataPath
+                        !relativePath.isNullOrBlank() ->
+                            File(Environment.getExternalStorageDirectory(), relativePath).resolve(name).absolutePath
+                        else -> continue
+                    }
+                    if (path.contains("${File.separator}Android${File.separator}data${File.separator}", ignoreCase = true)) {
+                        continue
+                    }
+
+                    candidates += FileItem(
+                        id = cursor.getLong(idCol),
+                        name = name,
+                        path = path,
+                        size = cursor.getLong(sizeCol),
+                        dateModified = cursor.getLong(dateCol),
+                        mimeType = cursor.getString(mimeCol) ?: "application/octet-stream",
+                        isDirectory = false,
+                        contentUri = ContentUris.withAppendedId(collection, cursor.getLong(idCol))
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(DUPLICATE_PERF_TAG, "query_failed", e)
+            e.printStackTrace()
+            return@withContext emptyList()
+        }
+        val queryElapsedMs = SystemClock.elapsedRealtime() - queryStartMs
+        Log.d(
+            DUPLICATE_PERF_TAG,
+            "phase=query elapsedMs=$queryElapsedMs candidates=${candidates.size} query=${query ?: "<none>"} progressive=true"
+        )
+
+        val groupStartMs = SystemClock.elapsedRealtime()
+        val sameSizeGroups = candidates.groupBy { it.size }.values.filter { it.size > 1 }
+        val groupingElapsedMs = SystemClock.elapsedRealtime() - groupStartMs
+        val groupedCandidateCount = sameSizeGroups.sumOf { it.size }
+        Log.d(
+            DUPLICATE_PERF_TAG,
+            "phase=group_by_size elapsedMs=$groupingElapsedMs groups=${sameSizeGroups.size} groupedCandidates=$groupedCandidateCount progressive=true"
+        )
+        if (sameSizeGroups.isEmpty()) {
+            Log.d(
+                DUPLICATE_PERF_TAG,
+                "phase=done elapsedMs=${SystemClock.elapsedRealtime() - totalStartMs} duplicates=0 progressive=true"
+            )
+            return@withContext emptyList()
+        }
+
+        val stage1StartMs = SystemClock.elapsedRealtime()
+        val sizeOnly = sameSizeGroups
+            .flatten()
+            .filter {
+                val file = File(it.path)
+                file.exists() && !file.isDirectory
+            }
+            .sortedWith(compareByDescending<FileItem> { it.size }.thenBy { it.name.lowercase(Locale.ROOT) })
+        val stage1ElapsedMs = SystemClock.elapsedRealtime() - stage1StartMs
+        Log.d(
+            DUPLICATE_PERF_TAG,
+            "phase=stage1_size_only elapsedMs=$stage1ElapsedMs result=${sizeOnly.size} progressive=true"
+        )
+
+        withContext(Dispatchers.Main) {
+            onSizeOnlyReady(sizeOnly)
+        }
+
+        val duplicates = mutableListOf<FileItem>()
+        var quickPhaseElapsedMs = 0L
+        var quickFingerprintChecks = 0
+        var narrowedGroupCount = 0
+        for (group in sameSizeGroups) {
+            currentCoroutineContext().ensureActive()
+
+            val quickPhaseStartMs = SystemClock.elapsedRealtime()
+            val quickFingerprintGroups = LinkedHashMap<String, MutableList<FileItem>>()
+            for (item in group) {
+                quickFingerprintChecks++
+                val file = File(item.path)
+                if (!file.exists() || file.isDirectory) continue
+                val quickFingerprint = computeQuickFingerprint(file) ?: continue
+                quickFingerprintGroups.getOrPut(quickFingerprint) { mutableListOf() }.add(item)
+            }
+            quickPhaseElapsedMs += (SystemClock.elapsedRealtime() - quickPhaseStartMs)
+
+            val narrowedGroups = quickFingerprintGroups.values.filter { it.size > 1 }
+            narrowedGroupCount += narrowedGroups.size
+            narrowedGroups.forEach { duplicates.addAll(it) }
+        }
+
+        Log.d(
+            DUPLICATE_PERF_TAG,
+            "phase=hash elapsedQuickMs=$quickPhaseElapsedMs quickChecks=$quickFingerprintChecks narrowedGroups=$narrowedGroupCount fullHashSkipped=true duplicateHits=${duplicates.size} progressive=true"
+        )
+
+        val sortStartMs = SystemClock.elapsedRealtime()
+        val sorted = duplicates.sortedWith(
+            compareByDescending<FileItem> { it.size }.thenBy { it.name.lowercase(Locale.ROOT) }
+        )
+        val sortElapsedMs = SystemClock.elapsedRealtime() - sortStartMs
+        val totalElapsedMs = SystemClock.elapsedRealtime() - totalStartMs
+        Log.d(
+            DUPLICATE_PERF_TAG,
+            "phase=done elapsedSortMs=$sortElapsedMs totalElapsedMs=$totalElapsedMs result=${sorted.size} progressive=true"
+        )
+        sorted
     }
 
     suspend fun getRecentFiles(
@@ -413,4 +712,44 @@ class FileRepository(private val context: Context) {
         } catch (e: Exception) { e.printStackTrace() }
         return fileList
     }
+
+    private fun computeQuickFingerprint(file: File): String? {
+        return try {
+            val length = file.length()
+            if (length <= 0L) return null
+
+            val digest = MessageDigest.getInstance("SHA-256")
+            digest.update(length.toString().toByteArray())
+
+            val chunkSize = minOf(QUICK_FINGERPRINT_CHUNK_BYTES.toLong(), length).toInt()
+            val offsets = linkedSetOf<Long>()
+            offsets += 0L
+            if (length > chunkSize) {
+                offsets += max(0L, (length / 2L) - (chunkSize / 2L))
+            }
+            if (length > (chunkSize.toLong() * 2L)) {
+                offsets += max(0L, length - chunkSize)
+            }
+
+            RandomAccessFile(file, "r").use { raf ->
+                val buffer = ByteArray(chunkSize)
+                for (offset in offsets) {
+                    raf.seek(offset)
+                    val bytesToRead = minOf(chunkSize.toLong(), length - offset).toInt()
+                    var totalRead = 0
+                    while (totalRead < bytesToRead) {
+                        val read = raf.read(buffer, totalRead, bytesToRead - totalRead)
+                        if (read <= 0) break
+                        totalRead += read
+                    }
+                    if (totalRead > 0) digest.update(buffer, 0, totalRead)
+                }
+            }
+
+            digest.digest().joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
 }

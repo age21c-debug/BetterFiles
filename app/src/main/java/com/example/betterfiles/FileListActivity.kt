@@ -38,6 +38,7 @@ import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.SimpleItemAnimator
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.navigation.NavigationView
 import kotlinx.coroutines.Dispatchers
@@ -148,6 +149,8 @@ class FileListActivity : AppCompatActivity() {
         )
         rvFiles.layoutManager = LinearLayoutManager(this)
         rvFiles.adapter = adapter
+        (rvFiles.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
+        rvFiles.itemAnimator?.changeDuration = 0
 
         // 3. ?�로???�정
         setupDrawer()
@@ -368,7 +371,7 @@ class FileListActivity : AppCompatActivity() {
             mode == "audio" ||
             mode == "document" ||
             mode == "app" ||
-            mode == "large"
+            mode == "large" || mode == "duplicate"
     }
 
     private fun updateStorageTabsForMode(mode: String) {
@@ -1111,12 +1114,12 @@ class FileListActivity : AppCompatActivity() {
         val ascKey = "is_ascending_$currentMode"
         val defaultSortMode = when (currentMode) {
             "folder" -> "name"
-            "large" -> "size"
+            "large", "duplicate" -> "size"
             else -> "date"
         }
         val defaultIsAscending = when (currentMode) {
             "folder" -> true
-            "large" -> false
+            "large", "duplicate" -> false
             else -> false
         }
 
@@ -1182,7 +1185,7 @@ class FileListActivity : AppCompatActivity() {
         if (currentMode == "recent") {
             currentSortMode = "date"
             isAscending = false
-        } else if (currentMode == "large") {
+        } else if (currentMode == "large" || currentMode == "duplicate") {
             currentSortMode = "size"
             isAscending = false
         } else {
@@ -1218,7 +1221,7 @@ class FileListActivity : AppCompatActivity() {
                     "app" -> repository.getAllApps()
                     "download" -> repository.getDownloads()
                     "recent" -> repository.getRecentFiles(maxAgeDays = null)
-                    "large" -> repository.getLargeFiles()
+                    "large", "duplicate" -> if (currentMode == "duplicate") repository.getDuplicateFiles() else repository.getLargeFiles()
                     else -> repository.getFilesByPath(currentPath)
                 }
                 applySortAndSubmit(applyStorageScopeFilter(rawFiles), isSearchResult = true)
@@ -1234,7 +1237,7 @@ class FileListActivity : AppCompatActivity() {
                 "document" -> repository.getAllDocuments(query)
                 "app" -> repository.getAllApps(query)
                 "recent" -> repository.getRecentFiles(query = query, maxAgeDays = null)
-                "large" -> repository.getLargeFiles(query = query)
+                "large", "duplicate" -> if (currentMode == "duplicate") repository.getDuplicateFiles(query = query) else repository.getLargeFiles(query = query)
                 "download" -> {
                     val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
                     repository.searchRecursive(downloadPath, query)
@@ -1308,14 +1311,17 @@ class FileListActivity : AppCompatActivity() {
                 return@Comparator if (o1.isDirectory) -1 else 1
             }
             if (currentMode == "recent" && !isSearchMode) {
-                return@Comparator o2.dateModified.compareTo(o1.dateModified)
+                val recentCmp = o2.dateModified.compareTo(o1.dateModified)
+                if (recentCmp != 0) return@Comparator recentCmp
+                return@Comparator o1.path.lowercase().compareTo(o2.path.lowercase())
             }
             val result = when (currentSortMode) {
                 "name" -> o1.name.lowercase().compareTo(o2.name.lowercase())
                 "size" -> o1.size.compareTo(o2.size)
                 else -> o1.dateModified.compareTo(o2.dateModified)
             }
-            if (isAscending) result else -result
+            val ordered = if (isAscending) result else -result
+            if (ordered != 0) ordered else o1.path.lowercase().compareTo(o2.path.lowercase())
         })
 
         val rvFiles = findViewById<RecyclerView>(R.id.rvFiles)
@@ -1461,6 +1467,13 @@ class FileListActivity : AppCompatActivity() {
                     isRecentCountLoading = false
                     applySortAndSubmit(applyStorageScopeFilter(fullFiles), isSearchResult = false)
                 }
+                return@launch
+            }
+            if (mode == "duplicate") {
+                val finalFiles = repository.getDuplicateFilesProgressive { sizeOnlyFiles ->
+                    applySortAndSubmit(applyStorageScopeFilter(sizeOnlyFiles), isSearchResult = false)
+                }
+                applySortAndSubmit(applyStorageScopeFilter(finalFiles), isSearchResult = false)
                 return@launch
             }
             isRecentCountLoading = false
@@ -1766,4 +1779,5 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 }
+
 
