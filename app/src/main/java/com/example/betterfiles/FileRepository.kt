@@ -15,6 +15,8 @@ import java.util.Locale
 import kotlin.math.max
 
 class FileRepository(private val context: Context) {
+    private val recentComparator = compareByDescending<FileItem> { it.dateModified }
+        .thenBy { it.path.lowercase(Locale.ROOT) }
 
     // ▼▼▼ [수정] 검색어(query) 파라미터 추가 (기본값 null) ▼▼▼
     // 1. 이미지 파일 가져오기 (전체 or 검색)
@@ -110,18 +112,6 @@ class FileRepository(private val context: Context) {
         limit: Int? = null,
         maxAgeDays: Int? = 30
     ): List<FileItem> = withContext(Dispatchers.IO) {
-        val collection = MediaStore.Files.getContentUri("external")
-        val projection = arrayOf(
-            MediaStore.Files.FileColumns._ID,
-            MediaStore.Files.FileColumns.DISPLAY_NAME,
-            MediaStore.Files.FileColumns.DATA,
-            MediaStore.Files.FileColumns.RELATIVE_PATH,
-            MediaStore.Files.FileColumns.SIZE,
-            MediaStore.Files.FileColumns.DATE_MODIFIED,
-            MediaStore.Files.FileColumns.DATE_ADDED,
-            MediaStore.Files.FileColumns.MIME_TYPE
-        )
-
         val selectionParts = mutableListOf<String>()
         val args = mutableListOf<String>()
         selectionParts += "${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL"
@@ -142,7 +132,60 @@ class FileRepository(private val context: Context) {
         }
 
         val selection = selectionParts.joinToString(" AND ")
-        val sortOrder = "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
+        val selectionArgs = args.toTypedArray()
+
+        if (limit != null && query.isNullOrBlank()) {
+            val byModified = queryRecentFilesBySort(
+                selection = selection,
+                selectionArgs = selectionArgs,
+                sortColumn = MediaStore.Files.FileColumns.DATE_MODIFIED,
+                maxRows = limit
+            )
+            val byAdded = queryRecentFilesBySort(
+                selection = selection,
+                selectionArgs = selectionArgs,
+                sortColumn = MediaStore.Files.FileColumns.DATE_ADDED,
+                maxRows = limit
+            )
+
+            val merged = LinkedHashMap<String, FileItem>()
+            for (item in byModified) merged["${item.id}|${item.path}"] = item
+            for (item in byAdded) merged["${item.id}|${item.path}"] = item
+
+            return@withContext merged.values
+                .sortedWith(recentComparator)
+                .take(limit)
+        }
+
+        val recentItems = queryRecentFilesBySort(
+            selection = selection,
+            selectionArgs = selectionArgs,
+            sortColumn = MediaStore.Files.FileColumns.DATE_MODIFIED,
+            maxRows = limit
+        )
+
+        val sorted = recentItems.sortedWith(recentComparator)
+        if (limit != null) sorted.take(limit) else sorted
+    }
+
+    private fun queryRecentFilesBySort(
+        selection: String,
+        selectionArgs: Array<String>,
+        sortColumn: String,
+        maxRows: Int?
+    ): List<FileItem> {
+        val collection = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns._ID,
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.DATA,
+            MediaStore.Files.FileColumns.RELATIVE_PATH,
+            MediaStore.Files.FileColumns.SIZE,
+            MediaStore.Files.FileColumns.DATE_MODIFIED,
+            MediaStore.Files.FileColumns.DATE_ADDED,
+            MediaStore.Files.FileColumns.MIME_TYPE
+        )
+        val sortOrder = "$sortColumn DESC"
         val recentItems = mutableListOf<FileItem>()
 
         try {
@@ -150,7 +193,7 @@ class FileRepository(private val context: Context) {
                 collection,
                 projection,
                 selection,
-                args.toTypedArray(),
+                selectionArgs,
                 sortOrder
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
@@ -196,7 +239,7 @@ class FileRepository(private val context: Context) {
                         contentUri = contentUri
                     )
 
-                    if (limit != null && recentItems.size >= limit) {
+                    if (maxRows != null && recentItems.size >= maxRows) {
                         break
                     }
                 }
@@ -205,8 +248,7 @@ class FileRepository(private val context: Context) {
             e.printStackTrace()
         }
 
-        val sorted = recentItems.sortedByDescending { it.dateModified }
-        if (limit != null) sorted.take(limit) else sorted
+        return recentItems
     }
 
     // 5. 실제 경로(Path)를 기반으로 파일 목록 가져오기 (폴더 탐색용)
