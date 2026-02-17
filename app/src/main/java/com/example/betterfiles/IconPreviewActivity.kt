@@ -24,6 +24,13 @@ class IconPreviewActivity : AppCompatActivity() {
         rv.layoutManager = GridLayoutManager(this, 2)
         rv.adapter = IconPreviewAdapter(
             listOf(
+                PreviewItem("Smart Folder Sparkle", "smart category", R.drawable.ic_smart_folder_sparkle, null),
+                PreviewItem("Smart Manage", "android.R.drawable.ic_menu_manage", android.R.drawable.ic_menu_manage, Color.parseColor("#111111")),
+                PreviewItem("Smart Sort", "android.R.drawable.ic_menu_sort_by_size", android.R.drawable.ic_menu_sort_by_size, Color.parseColor("#111111")),
+                PreviewItem("Smart Agenda", "android.R.drawable.ic_menu_agenda", android.R.drawable.ic_menu_agenda, Color.parseColor("#111111")),
+                PreviewItem("Smart View", "android.R.drawable.ic_menu_view", android.R.drawable.ic_menu_view, Color.parseColor("#111111")),
+                PreviewItem("Smart Info", "android.R.drawable.ic_menu_info_details", android.R.drawable.ic_menu_info_details, Color.parseColor("#111111")),
+                PreviewItem("Smart Camera", "android.R.drawable.ic_menu_camera", android.R.drawable.ic_menu_camera, Color.parseColor("#111111")),
                 PreviewItem("PDF", "pdf", R.drawable.ic_pdf, Color.parseColor("#F44336")),
                 PreviewItem("Word", "doc, docx", R.drawable.ic_doc_word, null),
                 PreviewItem("Excel", "xls, xlsx, csv", R.drawable.ic_doc_excel, null),

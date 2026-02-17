@@ -147,8 +147,8 @@
     <string name="zip_success_format">Compressed: %1$s</string>
     <string name="zip_failed_format">Compression failed: %1$s</string>
     <string name="loading_label">Loading...</string>
-    <string name="icon_preview_title">Document Icon Preview</string>
-    <string name="icon_preview_subtitle">Long-press the home title to open this preview screen again.</string>
+    <string name="icon_preview_title">Icon Preview</string>
+    <string name="icon_preview_subtitle">Compare smart-category candidate icons and document icons.</string>
     <string name="renewal_preview_title">Main Renewal Preview</string>
     <string name="renewal_preview_subtitle">Long-press the category title on home to open this example.</string>
     <string name="storage_overview">Storage</string>

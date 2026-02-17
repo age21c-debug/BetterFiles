@@ -159,7 +159,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         tvCategoryTitle.setOnLongClickListener {
-            startActivity(Intent(this, MainRenewalPreviewActivity::class.java))
+            startActivity(Intent(this, IconPreviewActivity::class.java))
             true
         }
     }

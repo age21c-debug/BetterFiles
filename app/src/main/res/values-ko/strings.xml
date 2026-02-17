@@ -147,8 +147,8 @@
     <string name="zip_success_format">압축 완료: %1$s</string>
     <string name="zip_failed_format">압축 실패: %1$s</string>
     <string name="loading_label">로딩 중...</string>
-    <string name="icon_preview_title">문서 아이콘 미리보기</string>
-    <string name="icon_preview_subtitle">홈 타이틀을 길게 누르면 다시 열 수 있습니다.</string>
+    <string name="icon_preview_title">아이콘 미리보기</string>
+    <string name="icon_preview_subtitle">스마트 카테고리 후보 아이콘과 문서 아이콘을 비교해볼 수 있습니다.</string>
     <string name="renewal_preview_title">메인 리뉴얼 미리보기</string>
     <string name="renewal_preview_subtitle">홈의 카테고리 타이틀을 길게 누르면 예시를 볼 수 있습니다.</string>
     <string name="storage_overview">저장공간</string>
