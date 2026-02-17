@@ -73,7 +73,9 @@ class FileAdapter(
                     oldItem.isSelected == newItem.isSelected &&
                     oldItem.duplicateGroupKey == newItem.duplicateGroupKey &&
                     oldItem.duplicateGroupCount == newItem.duplicateGroupCount &&
-                    oldItem.duplicateGroupSavingsBytes == newItem.duplicateGroupSavingsBytes
+                    oldItem.duplicateGroupSavingsBytes == newItem.duplicateGroupSavingsBytes &&
+                    oldItem.shareCount60d == newItem.shareCount60d &&
+                    oldItem.lastSharedAtMs == newItem.lastSharedAtMs
             }
         }, true)
         duplicateMinModifiedByGroup = newFiles
@@ -146,7 +148,15 @@ class FileAdapter(
                 tvOriginalBadge.visibility = View.GONE
             } else {
                 val sizeStr = Formatter.formatFileSize(itemView.context, item.size)
-                tvSize.text = "$sizeStr - $dateStr"
+                tvSize.text = if (item.shareCount60d > 0 && item.lastSharedAtMs > 0L) {
+                    itemView.context.getString(
+                        R.string.smart_shared_list_meta_format,
+                        item.shareCount60d,
+                        getFormattedDate(item.lastSharedAtMs)
+                    )
+                } else {
+                    "$sizeStr - $dateStr"
+                }
                 tvOriginalBadge.visibility = if (shouldShowOriginalBadge(item)) View.VISIBLE else View.GONE
             }
 

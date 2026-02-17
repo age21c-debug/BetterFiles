@@ -28,6 +28,7 @@ class SmartCategoryActivity : AppCompatActivity() {
         findViewById<ImageView>(R.id.ivSmartInfo).setOnClickListener {
             Toast.makeText(this, getString(R.string.smart_share_source_note), Toast.LENGTH_SHORT).show()
         }
+        findViewById<TextView>(R.id.tvSmartBadge).visibility = View.GONE
 
         findViewById<CardView>(R.id.cardSmartEntry1).setOnClickListener {
             startActivity(
@@ -83,11 +84,7 @@ class SmartCategoryActivity : AppCompatActivity() {
                     headline = getString(R.string.smart_shared_count_format, shared.itemCount),
                     sub0 = getString(R.string.smart_shared_window_desc),
                     sub1 = getString(R.string.smart_recent_shared_format, formatRelative(shared.lastSharedAt)),
-                    sub2 = getString(R.string.smart_total_size_format, Formatter.formatFileSize(this@SmartCategoryActivity, shared.totalBytes)),
-                    preview = getString(
-                        R.string.smart_recent_included_files_format,
-                        shared.previewNames.size.coerceAtMost(2)
-                    )
+                    sub2 = getString(R.string.smart_total_size_format, Formatter.formatFileSize(this@SmartCategoryActivity, shared.totalBytes))
                 )
             }
 

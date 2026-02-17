@@ -170,6 +170,7 @@
     <string name="smart_shared_count_format">%1$d개</string>
     <string name="smart_shared_window_desc">최근 60일 동안 3회 이상 공유한 파일</string>
     <string name="smart_recent_shared_format">최근 공유: %1$s</string>
+    <string name="smart_shared_list_meta_format">%1$d회 공유 · 마지막 공유: %2$s</string>
     <string name="smart_recent_received_format">최근 수신: %1$s</string>
     <string name="smart_recent_updated_format">최근 수정: %1$s</string>
     <string name="smart_total_size_format">총 용량: %1$s</string>

@@ -25,7 +25,9 @@ data class FileItem(
     val duplicateGroupCount: Int = 0,
     val duplicateGroupSavingsBytes: Long = 0L,
     val smartScore: Int = 0,
-    val smartDocumentType: String? = null
+    val smartDocumentType: String? = null,
+    val shareCount60d: Int = 0,
+    val lastSharedAtMs: Long = 0L
 ) : Parcelable {
 
     // ?좎쭨瑜?蹂닿린 醫뗪쾶 諛붽씀??湲곕뒫 (?? 2024-01-30)

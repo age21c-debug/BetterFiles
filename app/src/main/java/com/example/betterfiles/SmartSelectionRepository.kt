@@ -31,7 +31,11 @@ class SmartSelectionRepository(private val context: Context) {
         Log.d(tag, "candidates=${candidates.size} query=${query ?: "<none>"}")
 
         val resolved = candidates.mapNotNull { candidate ->
-            val item = resolveCandidate(candidate) ?: return@mapNotNull null
+            val baseItem = resolveCandidate(candidate) ?: return@mapNotNull null
+            val item = baseItem.copy(
+                shareCount60d = candidate.shareCount60d,
+                lastSharedAtMs = candidate.lastSharedAt
+            )
             if (!query.isNullOrBlank() && !item.name.contains(query, ignoreCase = true)) {
                 return@mapNotNull null
             }

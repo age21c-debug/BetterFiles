@@ -170,6 +170,7 @@
     <string name="smart_shared_count_format">%1$d files</string>
     <string name="smart_shared_window_desc">Shared 3+ times in the last 60 days</string>
     <string name="smart_recent_shared_format">Recently shared: %1$s</string>
+    <string name="smart_shared_list_meta_format">Shared %1$d times · Last shared: %2$s</string>
     <string name="smart_recent_received_format">Recently received: %1$s</string>
     <string name="smart_recent_updated_format">Recently updated: %1$s</string>
     <string name="smart_total_size_format">Total size: %1$s</string>
