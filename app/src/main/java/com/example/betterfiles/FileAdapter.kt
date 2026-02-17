@@ -44,6 +44,8 @@ class FileAdapter(
     var isPasteMode = false
     var showDateHeaders = false
     var showDuplicateHeaders = false
+    var showMessengerHeaders = false
+    var showParentPathLine = false
 
     val currentList: List<FileItem>
         get() = files
@@ -206,6 +208,19 @@ class FileAdapter(
         }
 
         private fun bindDateHeader(item: FileItem, position: Int) {
+            if (showMessengerHeaders) {
+                val currentSource = MessengerPathMatcher.detectSourceName(item.path)
+                val previousSource = if (position > 0) MessengerPathMatcher.detectSourceName(files[position - 1].path) else null
+                val shouldShow = position == 0 || currentSource != previousSource
+                if (shouldShow) {
+                    tvDateHeader.visibility = View.VISIBLE
+                    tvDateHeader.text = toMessengerDisplayName(currentSource)
+                } else {
+                    tvDateHeader.visibility = View.GONE
+                }
+                return
+            }
+
             if (showDuplicateHeaders) {
                 val currentGroupKey = item.duplicateGroupKey
                 if (currentGroupKey.isNullOrBlank()) {
@@ -250,7 +265,33 @@ class FileAdapter(
             }
         }
 
+        private fun toMessengerDisplayName(source: String): String {
+            return when (source) {
+                "Messenger" -> itemView.context.getString(R.string.messenger_app_messenger)
+                "KakaoTalk" -> itemView.context.getString(R.string.messenger_app_kakaotalk)
+                "Telegram" -> itemView.context.getString(R.string.messenger_app_telegram)
+                "WhatsApp" -> itemView.context.getString(R.string.messenger_app_whatsapp)
+                "LINE" -> itemView.context.getString(R.string.messenger_app_line)
+                "Discord" -> itemView.context.getString(R.string.messenger_app_discord)
+                "Snapchat" -> itemView.context.getString(R.string.messenger_app_snapchat)
+                "Viber" -> itemView.context.getString(R.string.messenger_app_viber)
+                "Signal" -> itemView.context.getString(R.string.messenger_app_signal)
+                "Facebook" -> itemView.context.getString(R.string.messenger_app_facebook)
+                "TikTok" -> itemView.context.getString(R.string.messenger_app_tiktok)
+                "Threads" -> itemView.context.getString(R.string.messenger_app_threads)
+                "X" -> itemView.context.getString(R.string.messenger_app_x)
+                "Zalo" -> itemView.context.getString(R.string.messenger_app_zalo)
+                "Slack" -> itemView.context.getString(R.string.messenger_app_slack)
+                else -> source
+            }
+        }
+
         private fun bindParentPathLine(file: File) {
+            if (!showParentPathLine) {
+                tvPath.visibility = View.GONE
+                return
+            }
+
             val context = itemView.context
             val root = internalRootPath ?: StorageVolumeHelper.getStorageRoots(context).internalRoot.also {
                 internalRootPath = it

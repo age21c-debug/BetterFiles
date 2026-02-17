@@ -73,6 +73,7 @@ class MainActivity : AppCompatActivity() {
         val btnDocuments: View = findViewById(R.id.btnDocuments)
         val btnDownloads: View = findViewById(R.id.btnDownloads)
         val btnApps: View = findViewById(R.id.btnApps)
+        val btnSmartCategory: View = findViewById(R.id.btnSmartCategory)
         val btnMainMenu: View = findViewById(R.id.btnMainMenu)
         val btnHomeSearch: View = findViewById(R.id.btnHomeSearch)
         val cardStorageAnalysis: View = findViewById(R.id.cardStorageAnalysis)
@@ -126,6 +127,10 @@ class MainActivity : AppCompatActivity() {
 
         btnApps.setOnClickListener {
             openActivity(mode = "app", title = getString(R.string.apps))
+        }
+
+        btnSmartCategory.setOnClickListener {
+            startActivity(Intent(this, SmartCategoryActivity::class.java))
         }
 
         tvRecentSeeAll.setOnClickListener {
@@ -528,6 +533,7 @@ class MainActivity : AppCompatActivity() {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
+            ShareEventLogger.recordShareAsync(applicationContext, listOf(fileItem))
             startActivity(Intent.createChooser(intent, getString(R.string.menu_share)))
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_cannot_share), Toast.LENGTH_SHORT).show()

@@ -45,6 +45,12 @@
         <activity
             android:name=".StorageAnalysisActivity"
             android:exported="false" />
+        <activity
+            android:name=".SmartCategoryActivity"
+            android:exported="false" />
+        <activity
+            android:name=".MessengerAppsActivity"
+            android:exported="false" />
     <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"

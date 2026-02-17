@@ -75,6 +75,180 @@ class FileRepository(private val context: Context) {
             .filter { StorageVolumeHelper.detectVolume(it.path, roots) == StorageVolumeType.INTERNAL }
     }
 
+    suspend fun getMessengerFiles(query: String? = null, sourceApp: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
+        val collection = MediaStore.Files.getContentUri("external")
+        val sortOrder = "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
+        val ownerPackages = MessengerPathMatcher.sources
+            .flatMap { it.ownerPackages }
+            .distinct()
+        val ownerToSource = MessengerPathMatcher.sources
+            .flatMap { source -> source.ownerPackages.map { owner -> owner to source.appName } }
+            .toMap()
+        val whitelistPathPatterns = MessengerPathMatcher.sources
+            .flatMap { it.pathPatterns }
+            .distinct()
+        val downloadsOwnerBlacklist = setOf(
+            "com.android.providers.downloads",
+            "com.google.android.providers.downloads"
+        )
+        val relativePathLikeClauses = whitelistPathPatterns
+            .joinToString(" OR ") { "${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ?" }
+        val selectionParts = mutableListOf(
+            "${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL",
+            "${MediaStore.Files.FileColumns.SIZE} >= ?",
+            "(" +
+                "${MediaStore.Files.FileColumns.OWNER_PACKAGE_NAME} IN (${ownerPackages.joinToString(",") { "?" }}) OR " +
+                relativePathLikeClauses +
+            ")"
+        )
+        val selectionArgs = mutableListOf(
+            (10L * 1024L).toString()
+        )
+        selectionArgs += ownerPackages
+        selectionArgs += whitelistPathPatterns.map { "%$it%" }
+
+        if (!query.isNullOrBlank()) {
+            selectionParts += "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?"
+            selectionArgs += "%$query%"
+        }
+
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns._ID,
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.DATA,
+            MediaStore.Files.FileColumns.RELATIVE_PATH,
+            MediaStore.Files.FileColumns.SIZE,
+            MediaStore.Files.FileColumns.DATE_MODIFIED,
+            MediaStore.Files.FileColumns.MIME_TYPE,
+            MediaStore.Files.FileColumns.OWNER_PACKAGE_NAME
+        )
+        val queried = mutableListOf<FileItem>()
+        try {
+            context.contentResolver.query(
+                collection,
+                projection,
+                selectionParts.joinToString(" AND "),
+                selectionArgs.toTypedArray(),
+                sortOrder
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME)
+                val pathCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA)
+                val relativePathCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.RELATIVE_PATH)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATE_MODIFIED)
+                val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE)
+                val ownerCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.OWNER_PACKAGE_NAME)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    val name = cursor.getString(nameCol) ?: continue
+                    val dataPath = if (pathCol >= 0) cursor.getString(pathCol) else null
+                    val relativePath = if (relativePathCol >= 0) cursor.getString(relativePathCol) else null
+                    val path = when {
+                        !dataPath.isNullOrBlank() -> dataPath
+                        !relativePath.isNullOrBlank() -> File(Environment.getExternalStorageDirectory(), relativePath).resolve(name).absolutePath
+                        else -> continue
+                    }
+                    val size = cursor.getLong(sizeCol)
+                    if (!MessengerPathMatcher.isValidSize(size)) continue
+                    if (path.contains("/cache/", ignoreCase = true) ||
+                        path.contains("/temp/", ignoreCase = true) ||
+                        path.contains("/thumbnails/", ignoreCase = true)
+                    ) continue
+
+                    val owner = if (ownerCol >= 0) cursor.getString(ownerCol) else null
+                    val isDedicatedMessengerPath = MessengerPathMatcher.isMessengerPath(path)
+                    val normalizedRel = (relativePath ?: "").replace('\\', '/').trim()
+                    val relNoSlash = normalizedRel.trimEnd('/')
+                    val isDownloadRootFile = relNoSlash.equals("Download", ignoreCase = true)
+                    val ownerAllowedForDownloadRoot = !owner.isNullOrBlank() &&
+                        ownerPackages.contains(owner) &&
+                        !downloadsOwnerBlacklist.contains(owner)
+                    val shouldInclude = isDedicatedMessengerPath || (isDownloadRootFile && ownerAllowedForDownloadRoot)
+                    if (!shouldInclude) continue
+                    val resolvedSource = if (isDedicatedMessengerPath) {
+                        MessengerPathMatcher.detectSourceName(path)
+                    } else {
+                        owner?.let { ownerToSource[it] } ?: "Other"
+                    }
+
+                    val item = FileItem(
+                        id = id,
+                        name = name,
+                        path = path,
+                        size = size,
+                        dateModified = cursor.getLong(dateCol),
+                        mimeType = cursor.getString(mimeCol) ?: "application/octet-stream",
+                        isDirectory = false,
+                        contentUri = ContentUris.withAppendedId(collection, id)
+                    )
+                    if (sourceApp.isNullOrBlank() || resolvedSource == sourceApp) {
+                        queried += item
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MessengerFiles", "query failed", e)
+        }
+
+        val scanned = scanKnownMessengerDirectories(query, sourceApp)
+        val merged = LinkedHashMap<String, FileItem>()
+        queried.forEach { merged[it.path] = it }
+        scanned.forEach { merged[it.path] = it }
+        val matched = merged.values.sortedByDescending { it.dateModified }
+
+        Log.d(
+            "MessengerFiles",
+            "queried=${queried.size} scanned=${scanned.size} merged=${matched.size} query=${query ?: "<none>"} source=${sourceApp ?: "<all>"}"
+        )
+        if (matched.isEmpty()) {
+            queried.take(5).forEachIndexed { index, item ->
+                Log.d("MessengerFiles", "sample[$index]=${item.path}")
+            }
+        }
+        matched
+    }
+
+    private fun scanKnownMessengerDirectories(query: String?, sourceApp: String?): List<FileItem> {
+        val root = Environment.getExternalStorageDirectory().absolutePath
+        val knownDirs = MessengerPathMatcher.sources
+            .flatMap { it.pathPatterns }
+            .distinct()
+            .map { "$root/$it" }
+
+        val result = mutableListOf<FileItem>()
+        val queryLower = query?.trim()?.lowercase(Locale.ROOT)
+        knownDirs.forEach { dirPath ->
+            val dir = File(dirPath)
+            if (!dir.exists() || !dir.isDirectory) return@forEach
+
+            dir.walkTopDown()
+                .maxDepth(6)
+                .forEach { file ->
+                    if (!file.exists() || file.isDirectory) return@forEach
+                    if (!MessengerPathMatcher.isValidSize(file.length())) return@forEach
+                    if (!MessengerPathMatcher.isMessengerPath(file.absolutePath)) return@forEach
+                    if (!sourceApp.isNullOrBlank() && MessengerPathMatcher.detectSourceName(file.absolutePath) != sourceApp) return@forEach
+                    if (!queryLower.isNullOrBlank() && !file.name.lowercase(Locale.ROOT).contains(queryLower)) return@forEach
+
+                    val ext = file.extension.lowercase(Locale.ROOT)
+                    val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+                    result += FileItem(
+                        id = file.hashCode().toLong(),
+                        name = file.name,
+                        path = file.absolutePath,
+                        size = file.length(),
+                        dateModified = file.lastModified() / 1000L,
+                        mimeType = mime,
+                        isDirectory = false,
+                        contentUri = Uri.fromFile(file)
+                    )
+                }
+        }
+        return result
+    }
+
     // 5. 문서 파일 가져오기 (전체 or 검색)
     suspend fun getAllDocuments(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
         val collection = MediaStore.Files.getContentUri("external")
