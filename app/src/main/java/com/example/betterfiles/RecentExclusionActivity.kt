@@ -25,6 +25,7 @@ class RecentExclusionActivity : AppCompatActivity() {
     private lateinit var tvSubtitle: TextView
     private lateinit var tabLayout: TabLayout
     private var currentTab: ExclusionTab = ExclusionTab.FILE
+    private var hasChanges: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -169,6 +170,7 @@ class RecentExclusionActivity : AppCompatActivity() {
                     RecentExclusionAdapter.Type.EXTENSION -> RecentExclusionManager.removeExtension(this, entry.key)
                 }
                 if (removed) {
+                    hasChanges = true
                     Toast.makeText(this, getString(R.string.recent_exclusion_removed), Toast.LENGTH_SHORT).show()
                     refreshList()
                 } else {
@@ -177,5 +179,12 @@ class RecentExclusionActivity : AppCompatActivity() {
             }
             .setNegativeButton(getString(R.string.action_cancel), null)
             .show()
+    }
+
+    override fun finish() {
+        if (hasChanges) {
+            setResult(RESULT_OK)
+        }
+        super.finish()
     }
 }

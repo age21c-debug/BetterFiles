@@ -33,6 +33,7 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.core.content.FileProvider
@@ -108,6 +109,14 @@ class FileListActivity : AppCompatActivity() {
     private var finishOnSearchBack: Boolean = false
     private var storageScope: StorageScope = StorageScope.INTERNAL
     private var hasSdCard: Boolean = false
+    private var isFirstResume: Boolean = true
+    private var shouldRefreshOnResume: Boolean = false
+    private val recentExclusionManagerLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK && currentMode == "recent") {
+                loadData("recent", rootPath)
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -226,6 +235,8 @@ class FileListActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        val wasFirstResume = isFirstResume
+        isFirstResume = false
         val previousHasSd = hasSdCard
         hasSdCard = StorageVolumeHelper.hasSdCard(this)
         updateStorageTabsForMode(currentMode)
@@ -246,6 +257,11 @@ class FileListActivity : AppCompatActivity() {
 
         if (!previousHasSd && hasSdCard) {
             updateDrawerSdVisibility()
+        }
+
+        if (!wasFirstResume && shouldRefreshOnResume) {
+            shouldRefreshOnResume = false
+            loadData(currentMode, currentPath)
         }
     }
 
@@ -529,6 +545,7 @@ class FileListActivity : AppCompatActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(intent)
+            shouldRefreshOnResume = true
             ShareEventLogger.recordOpenPathAsync(applicationContext, file.absolutePath)
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_no_app_to_open), Toast.LENGTH_SHORT).show()
@@ -546,6 +563,7 @@ class FileListActivity : AppCompatActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(intent)
+            shouldRefreshOnResume = true
             ShareEventLogger.recordOpenPathAsync(applicationContext, file.absolutePath)
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_no_app_to_open), Toast.LENGTH_SHORT).show()
@@ -1357,6 +1375,7 @@ class FileListActivity : AppCompatActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(Intent.createChooser(intent, getString(R.string.menu_share)))
+            shouldRefreshOnResume = true
             ShareEventLogger.recordShareAsync(applicationContext, selectedItems)
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_cannot_share), Toast.LENGTH_SHORT).show()
@@ -2020,7 +2039,7 @@ class FileListActivity : AppCompatActivity() {
         popup.setOnMenuItemClickListener { menuItem ->
             when (menuItem.itemId) {
                 MENU_RECENT_MANAGE_EXCLUDED -> {
-                    startActivity(Intent(this, RecentExclusionActivity::class.java))
+                    recentExclusionManagerLauncher.launch(Intent(this, RecentExclusionActivity::class.java))
                     true
                 }
                 else -> false
@@ -2193,6 +2212,7 @@ class FileListActivity : AppCompatActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(Intent.createChooser(intent, getString(R.string.menu_share)))
+            shouldRefreshOnResume = true
             ShareEventLogger.recordShareAsync(applicationContext, listOf(fileItem))
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_cannot_share), Toast.LENGTH_SHORT).show()
@@ -2304,5 +2324,4 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 }
-
 
