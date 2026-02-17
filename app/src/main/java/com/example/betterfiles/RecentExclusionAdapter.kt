@@ -6,16 +6,29 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import java.io.File
 
 class RecentExclusionAdapter(
-    private val onRemoveClick: (String) -> Unit
+    private val onRemoveClick: (Entry) -> Unit
 ) : RecyclerView.Adapter<RecentExclusionAdapter.ViewHolder>() {
 
-    private var folders: List<String> = emptyList()
+    data class Entry(
+        val key: String,
+        val title: String,
+        val subtitle: String,
+        val meta: String,
+        val type: Type
+    )
 
-    fun submitList(newFolders: List<String>) {
-        folders = newFolders
+    enum class Type {
+        FILE,
+        FOLDER,
+        EXTENSION
+    }
+
+    private var items: List<Entry> = emptyList()
+
+    fun submitList(newItems: List<Entry>) {
+        items = newItems
         notifyDataSetChanged()
     }
 
@@ -26,29 +39,39 @@ class RecentExclusionAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(folders[position])
+        holder.bind(items[position])
     }
 
-    override fun getItemCount(): Int = folders.size
+    override fun getItemCount(): Int = items.size
 
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val ivIcon: ImageView = itemView.findViewById(R.id.ivExcludedTypeIcon)
         private val tvFolderName: TextView = itemView.findViewById(R.id.tvExcludedFolderName)
         private val tvFolderPath: TextView = itemView.findViewById(R.id.tvExcludedFolderPath)
         private val tvFolderVolume: TextView = itemView.findViewById(R.id.tvExcludedFolderVolume)
         private val btnRemove: ImageView = itemView.findViewById(R.id.btnRemoveExcluded)
 
-        fun bind(folderPath: String) {
-            val name = File(folderPath).name.ifBlank { folderPath }
-            tvFolderName.text = name
-            tvFolderPath.text = folderPath
-            val roots = StorageVolumeHelper.getStorageRoots(itemView.context)
-            val volume = when (StorageVolumeHelper.detectVolume(folderPath, roots)) {
-                StorageVolumeType.INTERNAL -> itemView.context.getString(R.string.internal_storage)
-                StorageVolumeType.SD_CARD -> itemView.context.getString(R.string.sd_card)
-                else -> itemView.context.getString(R.string.storage_other)
+        fun bind(entry: Entry) {
+            tvFolderName.text = entry.title
+            tvFolderPath.text = entry.subtitle
+            tvFolderVolume.text = entry.meta
+
+            when (entry.type) {
+                Type.FOLDER -> {
+                    ivIcon.setImageResource(R.drawable.ic_folder_solid)
+                    ivIcon.setColorFilter(0xFFFFA000.toInt())
+                }
+                Type.FILE -> {
+                    ivIcon.setImageResource(R.drawable.ic_file)
+                    ivIcon.setColorFilter(0xFF4E79A7.toInt())
+                }
+                Type.EXTENSION -> {
+                    ivIcon.setImageResource(R.drawable.ic_file)
+                    ivIcon.setColorFilter(0xFF7D5BA6.toInt())
+                }
             }
-            tvFolderVolume.text = volume
-            btnRemove.setOnClickListener { onRemoveClick(folderPath) }
+
+            btnRemove.setOnClickListener { onRemoveClick(entry) }
         }
     }
 }

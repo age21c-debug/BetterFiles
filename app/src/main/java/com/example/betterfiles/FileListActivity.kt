@@ -1,4 +1,4 @@
-package com.example.betterfiles
+﻿package com.example.betterfiles
 
 import android.app.AlertDialog
 import android.content.Context
@@ -59,8 +59,11 @@ class FileListActivity : AppCompatActivity() {
 
     companion object {
         private const val RECENT_INITIAL_BATCH = 120
-        private const val MENU_EXCLUDE_RECENT_FOLDER = 9001
-        private const val MENU_RECENT_MANAGE_EXCLUDED = 9002
+        private const val MENU_EXCLUDE_RECENT_ROOT = 9001
+        private const val MENU_EXCLUDE_RECENT_FILE = 9002
+        private const val MENU_EXCLUDE_RECENT_FOLDER = 9003
+        private const val MENU_EXCLUDE_RECENT_EXTENSION = 9004
+        private const val MENU_RECENT_MANAGE_EXCLUDED = 9005
     }
 
     private lateinit var adapter: FileAdapter
@@ -251,7 +254,7 @@ class FileListActivity : AppCompatActivity() {
         // 1. 기본 ?�트(?�상 ??��?�기) ?�거 -> ?�리가 ?�하?????��??? ?�네???????�시?�기 ?�함
         navView.itemIconTintList = null
 
-        // 2. ?�단 고정 메뉴(?�장 메모�? ?�운로드) ?�이콘을 ?�색?�로 ?�동 ?�정
+        // 2. ?�단 고정 메뉴(?�장 메모�? ?�운로드) ?�이콘을 ?�색?�로 ?�동 ?�정
         val menu = navView.menu
         val greyColor = Color.parseColor("#5F6368") // match home category icon tone
 
@@ -278,7 +281,7 @@ class FileListActivity : AppCompatActivity() {
         val sdItem = menu.findItem(R.id.nav_sd_card)
         sdItem?.icon?.mutate()?.setTint(greyColor)
 
-        // 3. ?�릭 리스??(기존 코드?�??�일)
+        // 3. ?�릭 리스??(기존 코드?�??�일)
         navView.setNavigationItemSelectedListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.nav_internal_storage -> {
@@ -363,20 +366,20 @@ class FileListActivity : AppCompatActivity() {
                         true
                     }
                 } else {
-                    // [?�일] ?�선 기본 ?�이�?�??�상 ?�정
+                    // [?�일] ?�선 기본 ?�이�?�??�상 ?�정
                     val iconRes = getFileIconResource(file.name)
                     val iconColor = getFileIconColor(file.name) ?: Color.GRAY
                     val drawable = getDrawable(iconRes)?.mutate()
                     drawable?.setTint(iconColor)
                     item.icon = drawable
 
-                    // [추�??? ?�네?? ?��?지/비디?�는 비동기로 로딩?�여 ?�이�?교체
+                    // [추�??? ?�네?? ?��?지/비디?�는 비동기로 로딩?�여 ?�이�?교체
                     if (isImageFile(file.name) || isVideoFile(file.name)) {
                         lifecycleScope.launch(Dispatchers.IO) {
                             val thumbnail = loadThumbnail(file) // ?�래??추�????�수 ?�출
                             if (thumbnail != null) {
                                 withContext(Dispatchers.Main) {
-                                    // ?�근 모서�??�네???�성
+                                    // ?�근 모서�??�네???�성
                                     val roundedDrawable = RoundedBitmapDrawableFactory.create(resources, thumbnail)
                                     roundedDrawable.cornerRadius = 16f
                                     item.icon = roundedDrawable
@@ -476,7 +479,7 @@ class FileListActivity : AppCompatActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ThumbnailUtils.createImageThumbnail(file, size, null)
             } else {
-                // 구버???�환 (간단??비트�??�코??
+                // 구버???�환 (간단??비트�??�코??
                 val options = BitmapFactory.Options().apply { inSampleSize = 4 }
                 if (isVideoFile(file.name)) {
                     ThumbnailUtils.createVideoThumbnail(file.absolutePath, android.provider.MediaStore.Video.Thumbnails.MINI_KIND)
@@ -532,7 +535,7 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // [?�수 2] 즐겨찾기 ?�에???�일 경로만으�??�행 (File ?�용)
+    // [?�수 2] 즐겨찾기 ?�에???�일 경로만으�??�행 (File ?�용)
     private fun openFile(file: File) {
         try {
             val uri = FileProvider.getUriForFile(this, "${packageName}.provider", file)
@@ -879,11 +882,11 @@ class FileListActivity : AppCompatActivity() {
         val detailsItem = popup.menu.findItem(R.id.action_selection_details)
         val favoriteItem = popup.menu.findItem(R.id.action_selection_favorite)
         val renameItem = popup.menu.findItem(R.id.action_selection_rename)
-        val excludeFolderItem = popup.menu.findItem(R.id.action_selection_exclude_folder)
+        val excludeRecentItem = popup.menu.findItem(R.id.action_selection_exclude_recent)
         detailsItem.isVisible = selectedItems.size == 1
         favoriteItem.isVisible = selectedItems.size == 1
         renameItem.isVisible = selectedItems.size == 1
-        excludeFolderItem.isVisible = currentMode == "recent" && selectedItems.isNotEmpty()
+        excludeRecentItem.isVisible = currentMode == "recent" && selectedItems.isNotEmpty()
         if (selectedItems.size == 1) {
             val isFav = FavoritesManager.isFavorite(this, selectedItems.first())
             favoriteItem.title = if (isFav) getString(R.string.favorite_remove) else getString(R.string.menu_favorite_add)
@@ -903,8 +906,16 @@ class FileListActivity : AppCompatActivity() {
                     showZipDialog(selectedItems)
                     true
                 }
+                R.id.action_selection_exclude_file -> {
+                    excludeFilesFromRecent(selectedItems)
+                    true
+                }
                 R.id.action_selection_exclude_folder -> {
                     excludeParentFoldersFromRecent(selectedItems)
+                    true
+                }
+                R.id.action_selection_exclude_extension -> {
+                    excludeExtensionsFromRecent(selectedItems)
                     true
                 }
                 R.id.action_selection_favorite -> {
@@ -929,6 +940,56 @@ class FileListActivity : AppCompatActivity() {
             }
         }
         popup.show()
+    }
+
+    private fun excludeFilesFromRecent(selectedItems: List<FileItem>) {
+        if (selectedItems.isEmpty()) return
+        val filePaths = selectedItems.map { it.path }.toSet()
+        var addedCount = 0
+        var alreadyCount = 0
+        for (path in filePaths) {
+            if (RecentExclusionManager.addFile(this, path)) {
+                addedCount++
+            } else {
+                alreadyCount++
+            }
+        }
+        Toast.makeText(
+            this,
+            getString(R.string.recent_exclusion_selection_result, addedCount, alreadyCount),
+            Toast.LENGTH_SHORT
+        ).show()
+        closeSelectionMode()
+        loadData("recent", rootPath)
+    }
+
+    private fun excludeExtensionsFromRecent(selectedItems: List<FileItem>) {
+        if (selectedItems.isEmpty()) return
+        val extensions = selectedItems
+            .map { File(it.path).extension.lowercase(Locale.getDefault()) }
+            .filter { it.isNotBlank() }
+            .toSet()
+        if (extensions.isEmpty()) {
+            Toast.makeText(this, getString(R.string.error_cannot_exclude_extension), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        var addedCount = 0
+        var alreadyCount = 0
+        for (extension in extensions) {
+            if (RecentExclusionManager.addExtension(this, extension)) {
+                addedCount++
+            } else {
+                alreadyCount++
+            }
+        }
+        Toast.makeText(
+            this,
+            getString(R.string.recent_exclusion_selection_result, addedCount, alreadyCount),
+            Toast.LENGTH_SHORT
+        ).show()
+        closeSelectionMode()
+        loadData("recent", rootPath)
     }
 
     private fun excludeParentFoldersFromRecent(selectedItems: List<FileItem>) {
@@ -1747,9 +1808,9 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
-    // loadData: 경로 ?�시 �?붙여?�기 �?UI 갱신 ?�출
+    // loadData: 경로 ?�시 �?붙여?�기 �?UI 갱신 ?�출
     private fun loadData(mode: String, path: String) {
-        // ���� �ε� �۾� ���
+        // ���� �ε� �۾� ���
         loadJob?.cancel()
 
         currentMode = mode
@@ -1771,7 +1832,7 @@ class FileListActivity : AppCompatActivity() {
         val scrollViewPath = findViewById<HorizontalScrollView>(R.id.scrollViewPath)
         val tvPathIndicator = findViewById<TextView>(R.id.tvPathIndicator)
 
-        // ��뷮/�ߺ� ȭ�鿡���� ��� ���� ��ư�� ��ü�������� ���
+        // ��뷮/�ߺ� ȭ�鿡���� ��� ���� ��ư�� ��ü�������� ���
         if (mode == "duplicate" || mode == "large" || mode == "low_usage_large") {
             btnSearch.setImageResource(R.drawable.ic_select_all)
             btnSearch.imageTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#673AB7"))
@@ -1825,7 +1886,7 @@ class FileListActivity : AppCompatActivity() {
 
         updatePasteBarUI()
 
-        // [추�?] ?�더 ?�이�?갱신 (?�버�?<-> ?�로가�?
+        // [추�?] ?�더 ?�이�?갱신 (?�버�?<-> ?�로가�?
         updateHeaderIcon()
 
         // ?�로??로딩 ?�업 ?�작
@@ -1890,17 +1951,20 @@ class FileListActivity : AppCompatActivity() {
         val favItem = popup.menu.findItem(R.id.action_favorite)
         val isFav = FavoritesManager.isFavorite(this, fileItem)
 
-        // [변�? ?�더/?�일 구분 ?�이 즐겨찾기 메뉴 ?�성??
+        // [변�? ?�더/?�일 구분 ?�이 즐겨찾기 메뉴 ?�성??
         favItem.isVisible = true
         favItem.title = if (isFav) getString(R.string.favorite_remove) else getString(R.string.menu_favorite_add)
 
         if (currentMode == "recent") {
-            popup.menu.add(
+            val subMenu = popup.menu.addSubMenu(
                 0,
-                MENU_EXCLUDE_RECENT_FOLDER,
+                MENU_EXCLUDE_RECENT_ROOT,
                 10_000,
-                getString(R.string.menu_exclude_folder_from_recent)
+                getString(R.string.menu_exclude_from_recent)
             )
+            subMenu.add(0, MENU_EXCLUDE_RECENT_FILE, 0, getString(R.string.menu_exclude_this_file))
+            subMenu.add(0, MENU_EXCLUDE_RECENT_FOLDER, 1, getString(R.string.menu_exclude_this_file_folder))
+            subMenu.add(0, MENU_EXCLUDE_RECENT_EXTENSION, 2, getString(R.string.menu_exclude_this_file_extension))
         }
 
         popup.setOnMenuItemClickListener { menuItem ->
@@ -1920,10 +1984,29 @@ class FileListActivity : AppCompatActivity() {
                     excludeParentFolderFromRecent(fileItem)
                     true
                 }
+                MENU_EXCLUDE_RECENT_FILE -> {
+                    excludeFileFromRecent(fileItem)
+                    true
+                }
+                MENU_EXCLUDE_RECENT_EXTENSION -> {
+                    excludeExtensionFromRecent(fileItem)
+                    true
+                }
                 else -> false
             }
         }
         popup.show()
+    }
+
+    private fun excludeFileFromRecent(fileItem: FileItem) {
+        val added = RecentExclusionManager.addFile(this, fileItem.path)
+        val message = if (added) {
+            getString(R.string.recent_excluded_file_added, fileItem.name)
+        } else {
+            getString(R.string.recent_excluded_file_exists, fileItem.name)
+        }
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        loadData("recent", rootPath)
     }
 
     private fun showRecentHeaderMenu(view: View) {
@@ -1944,6 +2027,24 @@ class FileListActivity : AppCompatActivity() {
             }
         }
         popup.show()
+    }
+
+    private fun excludeExtensionFromRecent(fileItem: FileItem) {
+        val extension = File(fileItem.path).extension.lowercase(Locale.getDefault())
+        if (extension.isBlank()) {
+            Toast.makeText(this, getString(R.string.error_cannot_exclude_extension), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val added = RecentExclusionManager.addExtension(this, extension)
+        val displayExtension = ".$extension"
+        val message = if (added) {
+            getString(R.string.recent_excluded_extension_added, displayExtension)
+        } else {
+            getString(R.string.recent_excluded_extension_exists, displayExtension)
+        }
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        loadData("recent", rootPath)
     }
 
     private fun excludeParentFolderFromRecent(fileItem: FileItem) {
@@ -2147,7 +2248,7 @@ class FileListActivity : AppCompatActivity() {
             startCal.get(Calendar.DAY_OF_YEAR) == endCal.get(Calendar.DAY_OF_YEAR)
         val base = if (sameDay) {
             if (locale.language == Locale.KOREAN.language) {
-                SimpleDateFormat("M�� d��", locale).format(startMs)
+                SimpleDateFormat("M�� d��", locale).format(startMs)
             } else {
                 SimpleDateFormat("MMM d", locale).format(startMs)
             }
@@ -2157,7 +2258,7 @@ class FileListActivity : AppCompatActivity() {
             "$startText - $endText"
         }
         return if (locale.language == Locale.KOREAN.language) {
-            "$base �Կ� ����"
+            "$base �Կ� ����"
         } else {
             "$base Photo bundle"
         }

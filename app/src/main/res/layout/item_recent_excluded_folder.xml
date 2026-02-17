@@ -16,6 +16,7 @@
         android:padding="14dp">
 
         <ImageView
+            android:id="@+id/ivExcludedTypeIcon"
             android:layout_width="22dp"
             android:layout_height="22dp"
             android:src="@drawable/ic_folder_solid"
