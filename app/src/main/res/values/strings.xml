@@ -92,6 +92,7 @@
     <string name="date_header_today">Today</string>
     <string name="date_header_yesterday">Yesterday</string>
     <string name="selection_count_format">%1$d selected</string>
+    <string name="selection_count_reclaim_format">%1$d selected · Reclaim %2$s</string>
     <string name="selection_total_size_format">Total %1$s</string>
     <string name="selection_count_and_size_format">%1$d selected · Total %2$s</string>
     <string name="confirm_delete_selected_message">Delete %1$d selected items?</string>
@@ -251,9 +252,17 @@
     <string name="storage_duplicate_cleanup_title">Duplicate File Cleanup</string>
     <string name="storage_duplicate_cleanup_desc">Find and clean files with same name and size.</string>
     <string name="duplicate_group_header_format">Save %1$s · %2$d items</string>
+    <string name="low_usage_header_strong">Strong Recommendation</string>
+    <string name="low_usage_header_review">Needs Review</string>
+    <string name="low_usage_header_strong_format">Strong Recommendation · Reclaim about %1$s</string>
+    <string name="low_usage_header_review_format">Needs Review · Reclaim about %1$s</string>
+    <string name="low_usage_header_select_all_strong">Select all strong recommendations</string>
+    <string name="low_usage_header_select_all_review">Select all needs review</string>
     <string name="label_original">Original</string>
     <string name="storage_large_cleanup_title">Large File Cleanup</string>
     <string name="storage_large_cleanup_desc">Find and clean large files quickly.</string>
+    <string name="storage_low_usage_large_title">Low-Usage Large Files</string>
+    <string name="storage_low_usage_large_desc">Prioritize large files that were rarely opened and not used recently.</string>
     <string name="storage_feature_coming_soon">Detailed features will be implemented next.</string>
 </resources>
 

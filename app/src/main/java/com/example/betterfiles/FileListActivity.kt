@@ -168,6 +168,9 @@ class FileListActivity : AppCompatActivity() {
             },
             onSelectionChanged = {
                 updateSelectionUI()
+            },
+            onLowUsageHeaderClick = { isStrong ->
+                toggleLowUsageSectionSelection(isStrong)
             }
         )
         rvFiles.layoutManager = LinearLayoutManager(this)
@@ -190,7 +193,7 @@ class FileListActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
                     drawerLayout.closeDrawer(GravityCompat.START)
-                } else if ((currentMode == "duplicate" || currentMode == "large") && isSelectionMode) {
+                } else if ((currentMode == "duplicate" || currentMode == "large" || currentMode == "low_usage_large") && isSelectionMode) {
                     val hasSelected = adapter.currentList.any { it.isSelected }
                     if (hasSelected) {
                         closeSelectionMode()
@@ -402,7 +405,7 @@ class FileListActivity : AppCompatActivity() {
             mode == "audio" ||
             mode == "document" ||
             mode == "app" ||
-            mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents" || mode == "event_cluster"
+            mode == "large" || mode == "duplicate" || mode == "low_usage_large" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents" || mode == "event_cluster"
     }
 
     private fun updateStorageTabsForMode(mode: String) {
@@ -521,6 +524,7 @@ class FileListActivity : AppCompatActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(intent)
+            ShareEventLogger.recordOpenPathAsync(applicationContext, file.absolutePath)
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_no_app_to_open), Toast.LENGTH_SHORT).show()
         }
@@ -537,6 +541,7 @@ class FileListActivity : AppCompatActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(intent)
+            ShareEventLogger.recordOpenPathAsync(applicationContext, file.absolutePath)
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_no_app_to_open), Toast.LENGTH_SHORT).show()
         }
@@ -1077,7 +1082,7 @@ class FileListActivity : AppCompatActivity() {
         val btnShareSelection: ImageView = findViewById(R.id.btnShareSelection)
         val btnDeleteSelection: ImageView = findViewById(R.id.btnDeleteSelection)
         val btnSelectionMore: ImageView = findViewById(R.id.btnSelectionMore)
-        if (currentMode == "duplicate" || currentMode == "large") {
+        if (currentMode == "duplicate" || currentMode == "large" || currentMode == "low_usage_large") {
             btnShareSelection.visibility = View.GONE
             btnDeleteSelection.visibility = View.GONE
             btnSelectionMore.visibility = View.GONE
@@ -1091,7 +1096,7 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun ensureDuplicateSelectionMode() {
-        if (currentMode != "duplicate" && currentMode != "large") return
+        if (currentMode != "duplicate" && currentMode != "large" && currentMode != "low_usage_large") return
 
         if (!isSelectionMode) {
             isSelectionMode = true
@@ -1113,7 +1118,7 @@ class FileListActivity : AppCompatActivity() {
         updateSelectionUI()
     }
     private fun closeSelectionMode() {
-        if (currentMode == "duplicate" || currentMode == "large") {
+        if (currentMode == "duplicate" || currentMode == "large" || currentMode == "low_usage_large") {
             adapter.currentList.forEach { it.isSelected = false }
             isSelectionMode = true
             adapter.isSelectionMode = true
@@ -1139,13 +1144,39 @@ class FileListActivity : AppCompatActivity() {
         }
     }
 
+    private fun toggleLowUsageSectionSelection(isStrong: Boolean) {
+        if (currentMode != "low_usage_large") return
+        val currentList = adapter.currentList
+        if (currentList.isEmpty()) return
+
+        ensureDuplicateSelectionMode()
+
+        val targets = currentList.filter { (it.smartScore >= 100) == isStrong }
+        if (targets.isEmpty()) return
+
+        val allSelected = targets.all { it.isSelected }
+        val newState = !allSelected
+        currentList.forEach { item ->
+            if ((item.smartScore >= 100) == isStrong) {
+                item.isSelected = newState
+            }
+        }
+        adapter.notifyDataSetChanged()
+        updateSelectionUI()
+    }
     private fun updateSelectionUI() {
         val selectedItems = adapter.currentList.filter { it.isSelected }
         val count = selectedItems.size
         val tvSelectionCount: TextView = findViewById(R.id.tvSelectionCount)
-        tvSelectionCount.text = getString(R.string.selection_count_format, count)
+        if (currentMode == "low_usage_large") {
+            val selectedBytes = selectedItems.sumOf { if (it.isDirectory) 0L else it.size }
+            val selectedSize = Formatter.formatFileSize(this, selectedBytes)
+            tvSelectionCount.text = getString(R.string.selection_count_reclaim_format, count, selectedSize)
+        } else {
+            tvSelectionCount.text = getString(R.string.selection_count_format, count)
+        }
 
-        if (currentMode == "duplicate" || currentMode == "large") {
+        if (currentMode == "duplicate" || currentMode == "large" || currentMode == "low_usage_large") {
             val totalBytes = selectedItems.sumOf { if (it.isDirectory) 0L else it.size }
             val totalSize = Formatter.formatFileSize(this, totalBytes)
             applySelectionDeleteBarPreviewStyle(count, totalSize)
@@ -1262,8 +1293,8 @@ class FileListActivity : AppCompatActivity() {
                 putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            ShareEventLogger.recordShareAsync(applicationContext, selectedItems)
             startActivity(Intent.createChooser(intent, getString(R.string.menu_share)))
+            ShareEventLogger.recordShareAsync(applicationContext, selectedItems)
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_cannot_share), Toast.LENGTH_SHORT).show()
         }
@@ -1281,13 +1312,13 @@ class FileListActivity : AppCompatActivity() {
         val ascKey = "is_ascending_$currentMode"
         val defaultSortMode = when (currentMode) {
             "folder" -> "name"
-            "large", "duplicate" -> "size"
+            "large", "duplicate", "low_usage_large" -> "size"
             "smart_shared", "smart_documents", "event_cluster" -> "date"
             else -> "date"
         }
         val defaultIsAscending = when (currentMode) {
             "folder" -> true
-            "large", "duplicate" -> false
+            "large", "duplicate", "low_usage_large" -> false
             "smart_shared", "smart_documents", "event_cluster" -> false
             else -> false
         }
@@ -1324,7 +1355,7 @@ class FileListActivity : AppCompatActivity() {
         btnNewFolder.setOnClickListener { showCreateFolderDialog() }
 
         btnSearch.setOnClickListener {
-            if (currentMode == "duplicate" || currentMode == "large") {
+            if (currentMode == "duplicate" || currentMode == "large" || currentMode == "low_usage_large") {
                 toggleSelectAll()
             } else {
                 enterSearchMode()
@@ -1413,14 +1444,14 @@ class FileListActivity : AppCompatActivity() {
         if (currentMode == "recent") {
             currentSortMode = "date"
             isAscending = false
-        } else if (currentMode == "large" || currentMode == "duplicate") {
+        } else if (currentMode == "large" || currentMode == "duplicate" || currentMode == "low_usage_large") {
             currentSortMode = "size"
             isAscending = false
         } else {
             currentSortMode = "name"
             isAscending = true
         }
-        btnSearchSort.visibility = if (currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "event_cluster") View.GONE else View.VISIBLE
+        btnSearchSort.visibility = if (currentMode == "large" || currentMode == "duplicate" || currentMode == "low_usage_large" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "event_cluster") View.GONE else View.VISIBLE
 
         headerNormal.visibility = View.GONE
         headerSearch.visibility = View.VISIBLE
@@ -1449,7 +1480,11 @@ class FileListActivity : AppCompatActivity() {
                     "app" -> repository.getAllApps()
                     "download" -> repository.getDownloads()
                     "recent" -> repository.getRecentFiles(maxAgeDays = null)
-                    "large", "duplicate" -> if (currentMode == "duplicate") repository.getDuplicateFiles() else repository.getLargeFiles()
+                    "large", "duplicate", "low_usage_large" -> when (currentMode) {
+                        "duplicate" -> repository.getDuplicateFiles()
+                        "low_usage_large" -> repository.getLowUsageLargeFiles()
+                        else -> repository.getLargeFiles()
+                    }
                     "smart_shared" -> smartSelectionRepository.getFrequentlySharedFiles()
                     "smart_documents" -> smartWorkDocumentRepository.getWorkDocuments(typeFilter = currentWorkDocTypeFilter)
                     "messenger" -> repository.getMessengerFiles(sourceApp = messengerAppFilter)
@@ -1469,7 +1504,11 @@ class FileListActivity : AppCompatActivity() {
                 "document" -> repository.getAllDocuments(query)
                 "app" -> repository.getAllApps(query)
                 "recent" -> repository.getRecentFiles(query = query, maxAgeDays = null)
-                "large", "duplicate" -> if (currentMode == "duplicate") repository.getDuplicateFiles(query = query) else repository.getLargeFiles(query = query)
+                "large", "duplicate", "low_usage_large" -> when (currentMode) {
+                    "duplicate" -> repository.getDuplicateFiles(query = query)
+                    "low_usage_large" -> repository.getLowUsageLargeFiles(query = query)
+                    else -> repository.getLargeFiles(query = query)
+                }
                 "smart_shared" -> smartSelectionRepository.getFrequentlySharedFiles(query = query)
                 "smart_documents" -> smartWorkDocumentRepository.getWorkDocuments(query = query, typeFilter = currentWorkDocTypeFilter)
                 "messenger" -> repository.getMessengerFiles(query = query, sourceApp = messengerAppFilter)
@@ -1509,7 +1548,7 @@ class FileListActivity : AppCompatActivity() {
             return
         }
 
-        if ((currentMode == "recent" && !isSearchMode) || currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "event_cluster") return
+        if ((currentMode == "recent" && !isSearchMode) || currentMode == "large" || currentMode == "duplicate" || currentMode == "low_usage_large" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "event_cluster") return
 
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_sort, popup.menu)
@@ -1583,7 +1622,7 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun applySortAndSubmit(files: List<FileItem>, isSearchResult: Boolean = false) {
-        val sortedFiles = if (currentMode == "duplicate" || currentMode == "large" || currentMode == "smart_shared" || currentMode == "event_cluster") {
+        val sortedFiles = if (currentMode == "duplicate" || currentMode == "large" || currentMode == "low_usage_large" || currentMode == "smart_shared" || currentMode == "event_cluster") {
             files
         } else if (currentMode == "smart_documents") {
             val baseComparator = if (currentSmartDocumentsSort == "date") {
@@ -1651,8 +1690,9 @@ class FileListActivity : AppCompatActivity() {
                 currentMode == "download"
             adapter.showDateHeaders = supportsDateSections && currentSortMode == "date"
             adapter.showDuplicateHeaders = currentMode == "duplicate"
+            adapter.showLowUsageHeaders = currentMode == "low_usage_large"
 
-            val filesToSubmit = if ((currentMode == "duplicate" || currentMode == "large") && isSelectionMode) {
+            val filesToSubmit = if ((currentMode == "duplicate" || currentMode == "large" || currentMode == "low_usage_large") && isSelectionMode) {
                 val selectedPaths = adapter.currentList.asSequence()
                     .filter { it.isSelected }
                     .map { it.path }
@@ -1663,7 +1703,7 @@ class FileListActivity : AppCompatActivity() {
             }
 
             adapter.submitList(filesToSubmit)
-            if (currentMode == "duplicate" || currentMode == "large") ensureDuplicateSelectionMode()
+            if (currentMode == "duplicate" || currentMode == "large" || currentMode == "low_usage_large") ensureDuplicateSelectionMode()
         }
 
         if (isSearchResult) {
@@ -1712,7 +1752,7 @@ class FileListActivity : AppCompatActivity() {
 
         currentMode = mode
         currentPath = path
-        adapter.showParentPathLine = mode == "duplicate" || mode == "large" || mode == "image" || mode == "video" || mode == "audio" || mode == "document" || mode == "download" || mode == "app" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents" || mode == "event_cluster"
+        adapter.showParentPathLine = mode == "duplicate" || mode == "large" || mode == "low_usage_large" || mode == "image" || mode == "video" || mode == "audio" || mode == "document" || mode == "download" || mode == "app" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents" || mode == "event_cluster"
         adapter.preferStaticIcons = false
         pasteTargetPath = if (mode == "folder") path else rootPath
         updateStorageTabsForMode(mode)
@@ -1730,7 +1770,7 @@ class FileListActivity : AppCompatActivity() {
         val tvPathIndicator = findViewById<TextView>(R.id.tvPathIndicator)
 
         // 대용량/중복 화면에서는 상단 우측 버튼을 전체선택으로 사용
-        if (mode == "duplicate" || mode == "large") {
+        if (mode == "duplicate" || mode == "large" || mode == "low_usage_large") {
             btnSearch.setImageResource(R.drawable.ic_select_all)
             btnSearch.imageTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#673AB7"))
         } else {
@@ -1742,7 +1782,7 @@ class FileListActivity : AppCompatActivity() {
             btnNewFolder.visibility = View.VISIBLE
             btnSort.visibility = View.VISIBLE
             btnRecentMore.visibility = View.GONE
-            btnSearchSort.visibility = if (mode == "large" || mode == "duplicate") View.GONE else View.VISIBLE
+            btnSearchSort.visibility = if (mode == "large" || mode == "duplicate" || mode == "low_usage_large") View.GONE else View.VISIBLE
 
             if (path == rootPath) {
                 tvTitle.text = rootTitle
@@ -1765,7 +1805,7 @@ class FileListActivity : AppCompatActivity() {
                 btnSort.visibility = View.GONE
                 btnRecentMore.visibility = View.VISIBLE
                 btnSearchSort.visibility = View.VISIBLE
-            } else if (mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger" || mode == "event_cluster") {
+            } else if (mode == "large" || mode == "duplicate" || mode == "low_usage_large" || mode == "smart_shared" || mode == "messenger" || mode == "event_cluster") {
                 btnSort.visibility = View.GONE
                 btnRecentMore.visibility = View.GONE
                 btnSearchSort.visibility = View.GONE
@@ -1825,6 +1865,7 @@ class FileListActivity : AppCompatActivity() {
                 "app" -> repository.getAllApps()
                 "download" -> repository.getDownloads()
                 "large" -> repository.getLargeFiles()
+                "low_usage_large" -> repository.getLowUsageLargeFiles()
                 "smart_shared" -> smartSelectionRepository.getFrequentlySharedFiles()
                 "smart_documents" -> smartWorkDocumentRepository.getWorkDocuments(typeFilter = currentWorkDocTypeFilter)
                 "messenger" -> repository.getMessengerFiles(sourceApp = messengerAppFilter)
@@ -2048,8 +2089,8 @@ class FileListActivity : AppCompatActivity() {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            ShareEventLogger.recordShareAsync(applicationContext, listOf(fileItem))
             startActivity(Intent.createChooser(intent, getString(R.string.menu_share)))
+            ShareEventLogger.recordShareAsync(applicationContext, listOf(fileItem))
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_cannot_share), Toast.LENGTH_SHORT).show()
         }

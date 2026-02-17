@@ -31,5 +31,14 @@ class StorageAnalysisActivity : AppCompatActivity() {
                 }
             )
         }
+        findViewById<CardView>(R.id.cardLowUsageLargeCleanup).setOnClickListener {
+            startActivity(
+                Intent(this, FileListActivity::class.java).apply {
+                    putExtra("mode", "low_usage_large")
+                    putExtra("title", getString(R.string.storage_low_usage_large_title))
+                    putExtra("path", StorageVolumeHelper.getStorageRoots(this@StorageAnalysisActivity).internalRoot)
+                }
+            )
+        }
     }
 }

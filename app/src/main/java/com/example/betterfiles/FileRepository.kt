@@ -21,10 +21,14 @@ import kotlin.math.max
 class FileRepository(private val context: Context) {
     companion object {
         private const val DEFAULT_LARGE_FILE_MIN_BYTES: Long = 100L * 1024L * 1024L // 100MB
+        private const val LOW_USAGE_CANDIDATE_MIN_SCORE = 5
+        private const val LOW_USAGE_STRONG_RECOMMEND_SCORE = 8
+        private const val DAY_MS = 24L * 60L * 60L * 1000L
         private const val QUICK_FINGERPRINT_CHUNK_BYTES = 64 * 1024
         private const val DUPLICATE_PERF_TAG = "DuplicatePerf"
     }
 
+    private val usageStore = SmartShareHistoryStore.get(context)
     private val recentComparator = compareByDescending<FileItem> { it.dateModified }
         .thenBy { it.path.lowercase(Locale.ROOT) }
 
@@ -322,6 +326,75 @@ class FileRepository(private val context: Context) {
         ).filter { item ->
             !item.isDirectory && item.size >= minBytes && File(item.path).exists()
         }
+    }
+
+    suspend fun getLowUsageLargeFiles(
+        query: String? = null
+    ): List<FileItem> = withContext(Dispatchers.IO) {
+        val largeFiles = getLargeFiles(query = query, minBytes = DEFAULT_LARGE_FILE_MIN_BYTES)
+            .filter { !it.isDirectory }
+        if (largeFiles.isEmpty()) return@withContext emptyList()
+
+        val normalizedPathToItem = LinkedHashMap<String, FileItem>(largeFiles.size)
+        largeFiles.forEach { item ->
+            normalizePath(item.path)?.let { normalized ->
+                normalizedPathToItem[normalized] = item
+            }
+        }
+        if (normalizedPathToItem.isEmpty()) return@withContext emptyList()
+
+        val usageByPath = usageStore.queryPathUsageSignals(normalizedPathToItem.keys.toList())
+        val now = System.currentTimeMillis()
+
+        val scored = normalizedPathToItem.mapNotNull { (normalizedPath, item) ->
+            val usage = usageByPath[normalizedPath]
+            val openCount = usage?.openCountTotal ?: 0
+            val lastOpenedAt = usage?.lastOpenedAt ?: 0L
+            val baselineMs = if (lastOpenedAt > 0L) lastOpenedAt else (item.dateModified * 1000L)
+            val ageDays = ((now - baselineMs).coerceAtLeast(0L) / DAY_MS).toInt()
+
+            val sizeScore = when {
+                item.size >= 500L * 1024L * 1024L -> 3
+                item.size >= 200L * 1024L * 1024L -> 2
+                item.size >= 100L * 1024L * 1024L -> 1
+                else -> 0
+            }
+            val openScore = when {
+                openCount <= 0 -> 3
+                openCount == 1 -> 2
+                openCount <= 3 -> 1
+                else -> 0
+            }
+            val ageScore = when {
+                ageDays >= 180 -> 3
+                ageDays >= 90 -> 2
+                ageDays >= 30 -> 1
+                else -> 0
+            }
+            val totalScore = sizeScore + openScore + ageScore
+            if (totalScore < LOW_USAGE_CANDIDATE_MIN_SCORE) return@mapNotNull null
+
+            val isStrongRecommend = totalScore >= LOW_USAGE_STRONG_RECOMMEND_SCORE && openCount == 0
+            val strongBonus = if (isStrongRecommend) 100 else 0
+            val rankScore = strongBonus + totalScore
+            ScoredLowUsageItem(
+                item = item.copy(smartScore = rankScore),
+                isStrongRecommend = isStrongRecommend,
+                totalScore = totalScore,
+                lastOpenedAt = lastOpenedAt,
+                openCount = openCount
+            )
+        }
+
+        scored
+            .sortedWith(
+                compareByDescending<ScoredLowUsageItem> { it.isStrongRecommend }
+                    .thenByDescending { it.totalScore }
+                    .thenByDescending { it.item.size }
+                    .thenByDescending { if (it.lastOpenedAt > 0L) it.lastOpenedAt else (it.item.dateModified * 1000L) }
+                    .thenBy { it.item.path.lowercase(Locale.ROOT) }
+            )
+            .map { it.item }
     }
 
     suspend fun getDuplicateFiles(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
@@ -921,6 +994,19 @@ class FileRepository(private val context: Context) {
         }
         return result
     }
+
+    private fun normalizePath(path: String?): String? {
+        if (path.isNullOrBlank()) return null
+        return runCatching { File(path).canonicalPath }.getOrElse { File(path).absolutePath }
+    }
+
+    private data class ScoredLowUsageItem(
+        val item: FileItem,
+        val isStrongRecommend: Boolean,
+        val totalScore: Int,
+        val lastOpenedAt: Long,
+        val openCount: Int
+    )
 
     private fun computeQuickFingerprint(file: File): String? {
         return try {

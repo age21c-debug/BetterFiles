@@ -27,18 +27,22 @@ class FileAdapter(
     private val onClick: (FileItem) -> Unit,
     private val onMoreClick: (View, FileItem) -> Unit,
     private val onLongClick: (FileItem) -> Unit,
-    private val onSelectionChanged: () -> Unit
+    private val onSelectionChanged: () -> Unit,
+    private val onLowUsageHeaderClick: ((Boolean) -> Unit)? = null
 ) : RecyclerView.Adapter<FileAdapter.FileViewHolder>() {
 
     private var files: List<FileItem> = emptyList()
     private val pdfThumbCache = LruCache<String, Bitmap>(160)
     private var internalRootPath: String? = null
     private var duplicateMinModifiedByGroup: Map<String, Long> = emptyMap()
+    private var lowUsageStrongTotalBytes: Long = 0L
+    private var lowUsageReviewTotalBytes: Long = 0L
 
     var isSelectionMode = false
     var isPasteMode = false
     var showDateHeaders = false
     var showDuplicateHeaders = false
+    var showLowUsageHeaders = false
     var showMessengerHeaders = false
     var showParentPathLine = false
     var preferStaticIcons = false
@@ -71,6 +75,7 @@ class FileAdapter(
                     oldItem.mimeType == newItem.mimeType &&
                     oldItem.isDirectory == newItem.isDirectory &&
                     oldItem.isSelected == newItem.isSelected &&
+                    oldItem.smartScore == newItem.smartScore &&
                     oldItem.duplicateGroupKey == newItem.duplicateGroupKey &&
                     oldItem.duplicateGroupCount == newItem.duplicateGroupCount &&
                     oldItem.duplicateGroupSavingsBytes == newItem.duplicateGroupSavingsBytes &&
@@ -86,6 +91,14 @@ class FileAdapter(
             }
             .groupBy({ it.first }, { it.second })
             .mapValues { (_, values) -> values.minOrNull() ?: 0L }
+        lowUsageStrongTotalBytes = newFiles
+            .asSequence()
+            .filter { isLowUsageStrongItem(it) }
+            .sumOf { if (it.isDirectory) 0L else it.size }
+        lowUsageReviewTotalBytes = newFiles
+            .asSequence()
+            .filter { !isLowUsageStrongItem(it) }
+            .sumOf { if (it.isDirectory) 0L else it.size }
         files = newFiles
         diffResult.dispatchUpdatesTo(this)
     }
@@ -108,9 +121,12 @@ class FileAdapter(
     inner class FileViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val tvName: TextView = itemView.findViewById(R.id.tvName)
         private val tvPath: TextView = itemView.findViewById(R.id.tvPath)
+        private val tvMetaDate: TextView = itemView.findViewById(R.id.tvMetaDate)
         private val tvSize: TextView = itemView.findViewById(R.id.tvSize)
         private val tvOriginalBadge: TextView = itemView.findViewById(R.id.tvOriginalBadge)
+        private val layoutSectionHeader: LinearLayout = itemView.findViewById(R.id.layoutSectionHeader)
         private val tvDateHeader: TextView = itemView.findViewById(R.id.tvDateHeader)
+        private val ivHeaderSelectAll: ImageView = itemView.findViewById(R.id.ivHeaderSelectAll)
         private val layoutRowContent: LinearLayout = itemView.findViewById(R.id.layoutRowContent)
         private val ivIcon: ImageView = itemView.findViewById(R.id.ivIcon)
         private val btnMore: ImageView = itemView.findViewById(R.id.btnMore)
@@ -144,19 +160,23 @@ class FileAdapter(
 
             val dateStr = getFormattedDate(item.dateModified * 1000)
             if (item.isDirectory) {
-                tvSize.text = dateStr
+                tvMetaDate.text = dateStr
+                tvSize.text = ""
+                tvSize.visibility = View.GONE
                 tvOriginalBadge.visibility = View.GONE
             } else {
                 val sizeStr = Formatter.formatFileSize(itemView.context, item.size)
-                tvSize.text = if (item.shareCount60d > 0 && item.lastSharedAtMs > 0L) {
+                tvMetaDate.text = if (item.shareCount60d > 0 && item.lastSharedAtMs > 0L) {
                     itemView.context.getString(
                         R.string.smart_shared_list_meta_format,
                         item.shareCount60d,
                         getFormattedDate(item.lastSharedAtMs)
                     )
                 } else {
-                    "$sizeStr - $dateStr"
+                    dateStr
                 }
+                tvSize.text = sizeStr
+                tvSize.visibility = View.VISIBLE
                 tvOriginalBadge.visibility = if (shouldShowOriginalBadge(item)) View.VISIBLE else View.GONE
             }
 
@@ -219,15 +239,21 @@ class FileAdapter(
         }
 
         private fun bindDateHeader(item: FileItem, position: Int) {
+            tvDateHeader.setOnClickListener(null)
+            tvDateHeader.isClickable = false
+            ivHeaderSelectAll.visibility = View.GONE
+            ivHeaderSelectAll.setOnClickListener(null)
+            layoutSectionHeader.visibility = View.GONE
+
             if (showMessengerHeaders) {
                 val currentSource = MessengerPathMatcher.detectSourceName(item.path)
                 val previousSource = if (position > 0) MessengerPathMatcher.detectSourceName(files[position - 1].path) else null
                 val shouldShow = position == 0 || currentSource != previousSource
                 if (shouldShow) {
-                    tvDateHeader.visibility = View.VISIBLE
+                    layoutSectionHeader.visibility = View.VISIBLE
                     tvDateHeader.text = toMessengerDisplayName(currentSource)
                 } else {
-                    tvDateHeader.visibility = View.GONE
+                    layoutSectionHeader.visibility = View.GONE
                 }
                 return
             }
@@ -241,10 +267,10 @@ class FileAdapter(
                 val previousGroupKey = if (position > 0) files[position - 1].duplicateGroupKey else null
                 val shouldShow = position == 0 || currentGroupKey != previousGroupKey
                 if (!shouldShow) {
-                    tvDateHeader.visibility = View.GONE
+                    layoutSectionHeader.visibility = View.GONE
                     return
                 }
-                tvDateHeader.visibility = View.VISIBLE
+                layoutSectionHeader.visibility = View.VISIBLE
                 val context = itemView.context
                 val savings = Formatter.formatFileSize(context, item.duplicateGroupSavingsBytes)
                 tvDateHeader.text = context.getString(
@@ -255,8 +281,49 @@ class FileAdapter(
                 return
             }
 
+            if (showLowUsageHeaders) {
+                val currentStrong = isLowUsageStrong(item)
+                val previousStrong = if (position > 0) isLowUsageStrong(files[position - 1]) else currentStrong
+                val shouldShow = position == 0 || currentStrong != previousStrong
+                if (shouldShow) {
+                    layoutSectionHeader.visibility = View.VISIBLE
+                    val context = itemView.context
+                    val totalSizeText = Formatter.formatFileSize(
+                        context,
+                        if (currentStrong) lowUsageStrongTotalBytes else lowUsageReviewTotalBytes
+                    )
+                    tvDateHeader.text = if (currentStrong) {
+                        context.getString(R.string.low_usage_header_strong_format, totalSizeText)
+                    } else {
+                        context.getString(R.string.low_usage_header_review_format, totalSizeText)
+                    }
+                    ivHeaderSelectAll.visibility = View.VISIBLE
+                    val sectionAllSelected = files
+                        .asSequence()
+                        .filter { isLowUsageStrong(it) == currentStrong }
+                        .all { it.isSelected }
+                    val tintColor = if (sectionAllSelected) {
+                        Color.parseColor("#673AB7")
+                    } else {
+                        Color.parseColor("#9AA0A6")
+                    }
+                    ivHeaderSelectAll.setColorFilter(tintColor)
+                    ivHeaderSelectAll.contentDescription = context.getString(
+                        if (currentStrong) {
+                            R.string.low_usage_header_select_all_strong
+                        } else {
+                            R.string.low_usage_header_select_all_review
+                        }
+                    )
+                    ivHeaderSelectAll.setOnClickListener { onLowUsageHeaderClick?.invoke(currentStrong) }
+                } else {
+                    layoutSectionHeader.visibility = View.GONE
+                }
+                return
+            }
+
             if (!showDateHeaders) {
-                tvDateHeader.visibility = View.GONE
+                layoutSectionHeader.visibility = View.GONE
                 return
             }
 
@@ -269,10 +336,10 @@ class FileAdapter(
             }
 
             if (shouldShow) {
-                tvDateHeader.visibility = View.VISIBLE
+                layoutSectionHeader.visibility = View.VISIBLE
                 tvDateHeader.text = formatHeaderDate(currentMillis)
             } else {
-                tvDateHeader.visibility = View.GONE
+                layoutSectionHeader.visibility = View.GONE
             }
         }
 
@@ -330,6 +397,10 @@ class FileAdapter(
             return item.dateModified == minModified
         }
 
+        private fun isLowUsageStrong(item: FileItem): Boolean {
+            return isLowUsageStrongItem(item)
+        }
+
         private fun bindSmallPathIcon() {
             val icon = AppCompatResources.getDrawable(itemView.context, R.drawable.ic_folder_solid) ?: return
             val sizePx = (itemView.resources.displayMetrics.density * 14f).toInt()
@@ -353,6 +424,10 @@ class FileAdapter(
             return calA.get(Calendar.YEAR) == calB.get(Calendar.YEAR) &&
                 calA.get(Calendar.DAY_OF_YEAR) == calB.get(Calendar.DAY_OF_YEAR)
         }
+    }
+
+    private fun isLowUsageStrongItem(item: FileItem): Boolean {
+        return item.smartScore >= 100
     }
 }
 

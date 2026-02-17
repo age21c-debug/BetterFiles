@@ -483,6 +483,7 @@ class MainActivity : AppCompatActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(intent)
+            ShareEventLogger.recordOpenPathAsync(applicationContext, file.absolutePath)
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_no_app_to_open), Toast.LENGTH_SHORT).show()
         }
@@ -496,6 +497,7 @@ class MainActivity : AppCompatActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(intent)
+            ShareEventLogger.recordOpenPathAsync(applicationContext, file.absolutePath)
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_no_app_to_open), Toast.LENGTH_SHORT).show()
         }
@@ -533,8 +535,8 @@ class MainActivity : AppCompatActivity() {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            ShareEventLogger.recordShareAsync(applicationContext, listOf(fileItem))
             startActivity(Intent.createChooser(intent, getString(R.string.menu_share)))
+            ShareEventLogger.recordShareAsync(applicationContext, listOf(fileItem))
         } catch (e: Exception) {
             Toast.makeText(this, getString(R.string.error_cannot_share), Toast.LENGTH_SHORT).show()
         }

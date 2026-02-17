@@ -14,6 +14,7 @@ import java.util.UUID
 object ShareEventLogger {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private const val CLEANUP_INTERVAL_MS = 12L * 60L * 60L * 1000L
+    private const val SHARE_DEDUPE_WINDOW_MS = 3_000L
     @Volatile
     private var lastCleanupAt: Long = 0L
 
@@ -25,8 +26,23 @@ object ShareEventLogger {
         scope.launch {
             val now = System.currentTimeMillis()
             val store = SmartShareHistoryStore.get(context)
-            store.recordShare(keys, now, UUID.randomUUID().toString())
+            store.recordShare(
+                keys = keys,
+                sharedAt = now,
+                batchId = UUID.randomUUID().toString(),
+                dedupeWindowMs = SHARE_DEDUPE_WINDOW_MS
+            )
             maybeCleanup(store, now)
+        }
+    }
+
+    fun recordOpenPathAsync(context: Context, path: String?) {
+        val normalized = normalizePath(path) ?: return
+        val key = SmartShareFileKey(type = SmartShareKeyType.PATH, key = normalized)
+        scope.launch {
+            val now = System.currentTimeMillis()
+            val store = SmartShareHistoryStore.get(context)
+            store.recordOpen(listOf(key), now)
         }
     }
 
@@ -78,4 +94,3 @@ object ShareEventLogger {
         return runCatching { File(path).canonicalPath }.getOrElse { File(path).absolutePath }
     }
 }
-
