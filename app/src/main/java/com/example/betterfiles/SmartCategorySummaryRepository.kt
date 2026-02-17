@@ -45,6 +45,7 @@ class SmartCategorySummaryRepository(private val context: Context) {
     private val store = SmartShareHistoryStore.get(context)
     private val fileRepository = FileRepository(context)
     private val workDocumentRepository = SmartWorkDocumentRepository(context)
+    private val eventPhotoBundleRepository = EventPhotoBundleRepository(context)
 
     suspend fun getFrequentlySharedSummary(): SharedFilesSummary = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
@@ -115,19 +116,16 @@ class SmartCategorySummaryRepository(private val context: Context) {
     }
 
     suspend fun getEventPhotoSummary(): EventPhotoSummary = withContext(Dispatchers.IO) {
-        val cutoffSec = (System.currentTimeMillis() - 3L * 24L * 60L * 60L * 1000L) / 1000L
-        val rows = queryFiles(
-            selection = """
-                ${MediaStore.Files.FileColumns.MIME_TYPE} LIKE ? AND
-                (${MediaStore.Files.FileColumns.DATE_MODIFIED} >= ? OR ${MediaStore.Files.FileColumns.DATE_ADDED} >= ?)
-            """.trimIndent(),
-            selectionArgs = arrayOf("image/%", cutoffSec.toString(), cutoffSec.toString())
-        )
+        val clusters = eventPhotoBundleRepository.getRecentEventClusters()
+        val latestCluster = clusters.firstOrNull()
         EventPhotoSummary(
-            itemCount = rows.size,
-            totalBytes = rows.sumOf { it.sizeBytes },
-            lastPhotoAtMs = rows.maxOfOrNull { it.timestampMs },
-            periodDays = 3
+            itemCount = clusters.size,
+            totalBytes = clusters.sumOf { it.totalBytes },
+            lastPhotoAtMs = latestCluster?.endMs,
+            periodDays = if (latestCluster == null) 0 else {
+                val periodMs = (latestCluster.endMs - latestCluster.startMs).coerceAtLeast(0L)
+                (periodMs / (24L * 60L * 60L * 1000L)).toInt() + 1
+            }
         )
     }
 

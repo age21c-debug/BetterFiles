@@ -50,6 +50,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -66,6 +67,7 @@ class FileListActivity : AppCompatActivity() {
     private lateinit var repository: FileRepository
     private lateinit var smartSelectionRepository: SmartSelectionRepository
     private lateinit var smartWorkDocumentRepository: SmartWorkDocumentRepository
+    private lateinit var eventPhotoBundleRepository: EventPhotoBundleRepository
 
     // drawer/navigation
     private lateinit var drawerLayout: DrawerLayout
@@ -88,6 +90,8 @@ class FileListActivity : AppCompatActivity() {
     private var currentWorkDocTypeFilter: String = SmartWorkDocumentRepository.TYPE_ALL
     private var currentSmartDocumentsSort: String = "related"
     private var currentSmartDocumentsAscending: Boolean = false
+    private var currentEventStartMs: Long = 0L
+    private var currentEventEndMs: Long = 0L
     private lateinit var rootPath: String
     private lateinit var rootTitle: String
     private var pasteTargetPath: String = ""
@@ -109,6 +113,7 @@ class FileListActivity : AppCompatActivity() {
         repository = FileRepository(this)
         smartSelectionRepository = SmartSelectionRepository(this)
         smartWorkDocumentRepository = SmartWorkDocumentRepository(this)
+        eventPhotoBundleRepository = EventPhotoBundleRepository(this)
         prefs = getSharedPreferences("BetterFilesPrefs", Context.MODE_PRIVATE)
 
         drawerLayout = findViewById(R.id.drawerLayout)
@@ -120,6 +125,8 @@ class FileListActivity : AppCompatActivity() {
         currentMode = intent.getStringExtra("mode") ?: "folder"
         messengerAppFilter = intent.getStringExtra("messengerApp")
         currentWorkDocTypeFilter = intent.getStringExtra("workDocType") ?: SmartWorkDocumentRepository.TYPE_ALL
+        currentEventStartMs = intent.getLongExtra("startMs", 0L)
+        currentEventEndMs = intent.getLongExtra("endMs", 0L)
         val intentPathExtra = intent.getStringExtra("path")
         val intentPath = if (intentPathExtra.isNullOrBlank()) {
             StorageVolumeHelper.getStorageRoots(this).internalRoot
@@ -129,6 +136,9 @@ class FileListActivity : AppCompatActivity() {
         finishOnSearchBack = intent.getBooleanExtra("startSearch", false)
 
         rootTitle = intentTitle
+        if (currentMode == "event_cluster" && currentEventStartMs > 0L && currentEventEndMs > 0L) {
+            rootTitle = formatEventClusterTitle(currentEventStartMs, currentEventEndMs)
+        }
         rootPath = intentPath
         currentPath = intentPath
         pasteTargetPath = intentPath
@@ -392,7 +402,7 @@ class FileListActivity : AppCompatActivity() {
             mode == "audio" ||
             mode == "document" ||
             mode == "app" ||
-            mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents"
+            mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents" || mode == "event_cluster"
     }
 
     private fun updateStorageTabsForMode(mode: String) {
@@ -1272,13 +1282,13 @@ class FileListActivity : AppCompatActivity() {
         val defaultSortMode = when (currentMode) {
             "folder" -> "name"
             "large", "duplicate" -> "size"
-            "smart_shared", "smart_documents" -> "date"
+            "smart_shared", "smart_documents", "event_cluster" -> "date"
             else -> "date"
         }
         val defaultIsAscending = when (currentMode) {
             "folder" -> true
             "large", "duplicate" -> false
-            "smart_shared", "smart_documents" -> false
+            "smart_shared", "smart_documents", "event_cluster" -> false
             else -> false
         }
 
@@ -1287,7 +1297,7 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun saveSortSettings() {
-        if (currentMode == "recent" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "smart_documents") return
+        if (currentMode == "recent" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "smart_documents" || currentMode == "event_cluster") return
 
         val editor = prefs.edit()
         val sortKey = "sort_mode_$currentMode"
@@ -1410,7 +1420,7 @@ class FileListActivity : AppCompatActivity() {
             currentSortMode = "name"
             isAscending = true
         }
-        btnSearchSort.visibility = if (currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger") View.GONE else View.VISIBLE
+        btnSearchSort.visibility = if (currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "event_cluster") View.GONE else View.VISIBLE
 
         headerNormal.visibility = View.GONE
         headerSearch.visibility = View.VISIBLE
@@ -1443,6 +1453,7 @@ class FileListActivity : AppCompatActivity() {
                     "smart_shared" -> smartSelectionRepository.getFrequentlySharedFiles()
                     "smart_documents" -> smartWorkDocumentRepository.getWorkDocuments(typeFilter = currentWorkDocTypeFilter)
                     "messenger" -> repository.getMessengerFiles(sourceApp = messengerAppFilter)
+                    "event_cluster" -> loadEventClusterFiles()
                     else -> repository.getFilesByPath(currentPath)
                 }
                 applySortAndSubmit(applyStorageScopeFilter(rawFiles), isSearchResult = true)
@@ -1462,6 +1473,7 @@ class FileListActivity : AppCompatActivity() {
                 "smart_shared" -> smartSelectionRepository.getFrequentlySharedFiles(query = query)
                 "smart_documents" -> smartWorkDocumentRepository.getWorkDocuments(query = query, typeFilter = currentWorkDocTypeFilter)
                 "messenger" -> repository.getMessengerFiles(query = query, sourceApp = messengerAppFilter)
+                "event_cluster" -> loadEventClusterFiles(query)
                 "download" -> {
                     val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
                     repository.searchRecursive(downloadPath, query)
@@ -1497,7 +1509,7 @@ class FileListActivity : AppCompatActivity() {
             return
         }
 
-        if ((currentMode == "recent" && !isSearchMode) || currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger") return
+        if ((currentMode == "recent" && !isSearchMode) || currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "event_cluster") return
 
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_sort, popup.menu)
@@ -1571,7 +1583,7 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun applySortAndSubmit(files: List<FileItem>, isSearchResult: Boolean = false) {
-        val sortedFiles = if (currentMode == "duplicate" || currentMode == "large" || currentMode == "smart_shared") {
+        val sortedFiles = if (currentMode == "duplicate" || currentMode == "large" || currentMode == "smart_shared" || currentMode == "event_cluster") {
             files
         } else if (currentMode == "smart_documents") {
             val baseComparator = if (currentSmartDocumentsSort == "date") {
@@ -1657,6 +1669,15 @@ class FileListActivity : AppCompatActivity() {
         if (isSearchResult) {
             tvFileCount.text = getString(R.string.file_count_search_format, sortedFiles.size)
         } else {
+            if (currentMode == "event_cluster") {
+                val totalBytes = sortedFiles.sumOf { it.size }
+                tvFileCount.text = getString(
+                    R.string.smart_event_item_meta_format,
+                    sortedFiles.size,
+                    Formatter.formatFileSize(this, totalBytes)
+                )
+                return
+            }
             if (currentMode == "smart_shared") {
                 tvFileCount.text = getString(R.string.file_count_format, sortedFiles.size) + " / " + getString(R.string.smart_share_source_note)
                 return
@@ -1691,7 +1712,7 @@ class FileListActivity : AppCompatActivity() {
 
         currentMode = mode
         currentPath = path
-        adapter.showParentPathLine = mode == "duplicate" || mode == "large" || mode == "image" || mode == "video" || mode == "audio" || mode == "document" || mode == "download" || mode == "app" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents"
+        adapter.showParentPathLine = mode == "duplicate" || mode == "large" || mode == "image" || mode == "video" || mode == "audio" || mode == "document" || mode == "download" || mode == "app" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents" || mode == "event_cluster"
         adapter.preferStaticIcons = false
         pasteTargetPath = if (mode == "folder") path else rootPath
         updateStorageTabsForMode(mode)
@@ -1744,7 +1765,7 @@ class FileListActivity : AppCompatActivity() {
                 btnSort.visibility = View.GONE
                 btnRecentMore.visibility = View.VISIBLE
                 btnSearchSort.visibility = View.VISIBLE
-            } else if (mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger") {
+            } else if (mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger" || mode == "event_cluster") {
                 btnSort.visibility = View.GONE
                 btnRecentMore.visibility = View.GONE
                 btnSearchSort.visibility = View.GONE
@@ -1807,6 +1828,7 @@ class FileListActivity : AppCompatActivity() {
                 "smart_shared" -> smartSelectionRepository.getFrequentlySharedFiles()
                 "smart_documents" -> smartWorkDocumentRepository.getWorkDocuments(typeFilter = currentWorkDocTypeFilter)
                 "messenger" -> repository.getMessengerFiles(sourceApp = messengerAppFilter)
+                "event_cluster" -> loadEventClusterFiles()
                 else -> repository.getFilesByPath(path)
             }
             if (mode == "smart_shared") {
@@ -2062,6 +2084,40 @@ class FileListActivity : AppCompatActivity() {
             val parentFile = File(currentPath).parentFile
             if (parentFile != null) loadData("folder", parentFile.absolutePath) else finish()
         } else { finish() }
+    }
+
+    private suspend fun loadEventClusterFiles(query: String? = null): List<FileItem> {
+        if (currentEventStartMs <= 0L || currentEventEndMs <= 0L) return emptyList()
+        val files = eventPhotoBundleRepository.getClusterPhotos(currentEventStartMs, currentEventEndMs)
+        if (query.isNullOrBlank()) return files
+        val q = query.lowercase()
+        return files.filter { item ->
+            item.name.lowercase().contains(q) || item.path.lowercase().contains(q)
+        }
+    }
+
+    private fun formatEventClusterTitle(startMs: Long, endMs: Long): String {
+        val locale = Locale.getDefault()
+        val startCal = Calendar.getInstance().apply { timeInMillis = startMs }
+        val endCal = Calendar.getInstance().apply { timeInMillis = endMs }
+        val sameDay = startCal.get(Calendar.YEAR) == endCal.get(Calendar.YEAR) &&
+            startCal.get(Calendar.DAY_OF_YEAR) == endCal.get(Calendar.DAY_OF_YEAR)
+        val base = if (sameDay) {
+            if (locale.language == Locale.KOREAN.language) {
+                SimpleDateFormat("Mø˘ d¿œ", locale).format(startMs)
+            } else {
+                SimpleDateFormat("MMM d", locale).format(startMs)
+            }
+        } else {
+            val startText = SimpleDateFormat("yyyy.MM.dd", locale).format(startMs)
+            val endText = SimpleDateFormat("yyyy.MM.dd", locale).format(endMs)
+            "$startText - $endText"
+        }
+        return if (locale.language == Locale.KOREAN.language) {
+            "$base √‘øµ π≠¿Ω"
+        } else {
+            "$base Photo bundle"
+        }
     }
 
     private fun showCreateFolderDialog() {

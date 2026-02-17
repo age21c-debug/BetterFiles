@@ -66,7 +66,7 @@
                 android:foreground="?android:attr/selectableItemBackground"
                 app:cardCornerRadius="14dp"
                 app:cardElevation="0dp"
-                app:cardBackgroundColor="#F3F8FF">
+                app:cardBackgroundColor="#FFFFFF">
 
                 <FrameLayout
                     android:layout_width="match_parent"
@@ -116,7 +116,7 @@
                                 android:layout_marginTop="4dp"
                                 android:text="@string/loading_label"
                                 android:textColor="#111111"
-                                android:textSize="20sp"
+                                android:textSize="16sp"
                                 android:textStyle="bold" />
 
                             <TextView
