@@ -45,6 +45,7 @@
 
     <string name="sort_section_title">Sort by</string>
     <string name="sort_date">Date</string>
+    <string name="smart_sort_related">Related</string>
     <string name="sort_name">Name</string>
     <string name="sort_size">Size</string>
     <string name="sort_order_section_title">Order</string>

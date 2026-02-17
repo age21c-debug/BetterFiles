@@ -86,6 +86,8 @@ class FileListActivity : AppCompatActivity() {
     private var currentMode: String = "folder"
     private var messengerAppFilter: String? = null
     private var currentWorkDocTypeFilter: String = SmartWorkDocumentRepository.TYPE_ALL
+    private var currentSmartDocumentsSort: String = "related"
+    private var currentSmartDocumentsAscending: Boolean = false
     private lateinit var rootPath: String
     private lateinit var rootTitle: String
     private var pasteTargetPath: String = ""
@@ -1408,7 +1410,7 @@ class FileListActivity : AppCompatActivity() {
             currentSortMode = "name"
             isAscending = true
         }
-        btnSearchSort.visibility = if (currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "smart_documents") View.GONE else View.VISIBLE
+        btnSearchSort.visibility = if (currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger") View.GONE else View.VISIBLE
 
         headerNormal.visibility = View.GONE
         headerSearch.visibility = View.VISIBLE
@@ -1490,7 +1492,12 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun showSortMenu(view: View) {
-        if ((currentMode == "recent" && !isSearchMode) || currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "smart_documents") return
+        if (currentMode == "smart_documents") {
+            showSmartDocumentsSortMenu(view)
+            return
+        }
+
+        if ((currentMode == "recent" && !isSearchMode) || currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger") return
 
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_sort, popup.menu)
@@ -1526,12 +1533,54 @@ class FileListActivity : AppCompatActivity() {
         }
         popup.show()
     }
+    private fun showSmartDocumentsSortMenu(view: View) {
+        val popup = PopupMenu(this, view)
+        popup.menuInflater.inflate(R.menu.menu_sort, popup.menu)
+
+        val menu = popup.menu
+        menu.findItem(R.id.sort_name)?.title = getString(R.string.smart_sort_related)
+        menu.findItem(R.id.sort_size)?.isVisible = false
+
+        when (currentSmartDocumentsSort) {
+            "date" -> menu.findItem(R.id.sort_date)?.isChecked = true
+            else -> menu.findItem(R.id.sort_name)?.isChecked = true
+        }
+        if (currentSmartDocumentsAscending) {
+            menu.findItem(R.id.order_asc)?.isChecked = true
+        } else {
+            menu.findItem(R.id.order_desc)?.isChecked = true
+        }
+
+        popup.setOnMenuItemClickListener { menuItem ->
+            menuItem.isChecked = true
+            when (menuItem.itemId) {
+                R.id.sort_name -> currentSmartDocumentsSort = "related"
+                R.id.sort_date -> currentSmartDocumentsSort = "date"
+                R.id.order_asc -> currentSmartDocumentsAscending = true
+                R.id.order_desc -> currentSmartDocumentsAscending = false
+                else -> return@setOnMenuItemClickListener false
+            }
+            if (isSearchMode) {
+                performSearch(currentSearchQuery)
+            } else {
+                loadData(currentMode, currentPath)
+            }
+            true
+        }
+        popup.show()
+    }
 
     private fun applySortAndSubmit(files: List<FileItem>, isSearchResult: Boolean = false) {
         val sortedFiles = if (currentMode == "duplicate" || currentMode == "large" || currentMode == "smart_shared") {
             files
         } else if (currentMode == "smart_documents") {
-            files.sortedWith(compareByDescending<FileItem> { it.smartScore }.thenByDescending { it.dateModified }.thenBy { it.path.lowercase() })
+            val baseComparator = if (currentSmartDocumentsSort == "date") {
+                compareBy<FileItem> { it.dateModified }.thenBy { it.smartScore }.thenBy { it.path.lowercase() }
+            } else {
+                compareBy<FileItem> { it.smartScore }.thenBy { it.dateModified }.thenBy { it.path.lowercase() }
+            }
+            val comparator = if (currentSmartDocumentsAscending) baseComparator else baseComparator.reversed()
+            files.sortedWith(comparator)
         } else if (currentMode == "messenger") {
             files.sortedWith(compareBy<FileItem> { MessengerPathMatcher.detectSourceName(it.path) }.thenByDescending { it.dateModified }.thenBy { it.path.lowercase() })
         } else {
@@ -1695,10 +1744,14 @@ class FileListActivity : AppCompatActivity() {
                 btnSort.visibility = View.GONE
                 btnRecentMore.visibility = View.VISIBLE
                 btnSearchSort.visibility = View.VISIBLE
-            } else if (mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents") {
+            } else if (mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger") {
                 btnSort.visibility = View.GONE
                 btnRecentMore.visibility = View.GONE
                 btnSearchSort.visibility = View.GONE
+            } else if (mode == "smart_documents") {
+                btnSort.visibility = View.VISIBLE
+                btnRecentMore.visibility = View.GONE
+                btnSearchSort.visibility = View.VISIBLE
             } else {
                 btnSort.visibility = View.VISIBLE
                 btnRecentMore.visibility = View.GONE
