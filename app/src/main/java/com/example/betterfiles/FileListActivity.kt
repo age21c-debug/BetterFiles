@@ -65,6 +65,7 @@ class FileListActivity : AppCompatActivity() {
     private lateinit var adapter: FileAdapter
     private lateinit var repository: FileRepository
     private lateinit var smartSelectionRepository: SmartSelectionRepository
+    private lateinit var smartWorkDocumentRepository: SmartWorkDocumentRepository
 
     // drawer/navigation
     private lateinit var drawerLayout: DrawerLayout
@@ -84,6 +85,7 @@ class FileListActivity : AppCompatActivity() {
     private var currentPath: String = ""
     private var currentMode: String = "folder"
     private var messengerAppFilter: String? = null
+    private var currentWorkDocTypeFilter: String = SmartWorkDocumentRepository.TYPE_ALL
     private lateinit var rootPath: String
     private lateinit var rootTitle: String
     private var pasteTargetPath: String = ""
@@ -104,6 +106,7 @@ class FileListActivity : AppCompatActivity() {
 
         repository = FileRepository(this)
         smartSelectionRepository = SmartSelectionRepository(this)
+        smartWorkDocumentRepository = SmartWorkDocumentRepository(this)
         prefs = getSharedPreferences("BetterFilesPrefs", Context.MODE_PRIVATE)
 
         drawerLayout = findViewById(R.id.drawerLayout)
@@ -114,6 +117,7 @@ class FileListActivity : AppCompatActivity() {
         val intentTitle = intent.getStringExtra("title") ?: getString(R.string.default_page_title)
         currentMode = intent.getStringExtra("mode") ?: "folder"
         messengerAppFilter = intent.getStringExtra("messengerApp")
+        currentWorkDocTypeFilter = intent.getStringExtra("workDocType") ?: SmartWorkDocumentRepository.TYPE_ALL
         val intentPathExtra = intent.getStringExtra("path")
         val intentPath = if (intentPathExtra.isNullOrBlank()) {
             StorageVolumeHelper.getStorageRoots(this).internalRoot
@@ -166,6 +170,7 @@ class FileListActivity : AppCompatActivity() {
         // 4. ?�벤???�정
         btnBack.setOnClickListener { handleHeaderNavigationClick() }
         setupHeaderEvents()
+        setupWorkDocumentChips()
         setupSelectionEvents()
         setupPasteEvents()
 
@@ -385,7 +390,7 @@ class FileListActivity : AppCompatActivity() {
             mode == "audio" ||
             mode == "document" ||
             mode == "app" ||
-            mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger"
+            mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents"
     }
 
     private fun updateStorageTabsForMode(mode: String) {
@@ -1265,13 +1270,13 @@ class FileListActivity : AppCompatActivity() {
         val defaultSortMode = when (currentMode) {
             "folder" -> "name"
             "large", "duplicate" -> "size"
-            "smart_shared" -> "date"
+            "smart_shared", "smart_documents" -> "date"
             else -> "date"
         }
         val defaultIsAscending = when (currentMode) {
             "folder" -> true
             "large", "duplicate" -> false
-            "smart_shared" -> false
+            "smart_shared", "smart_documents" -> false
             else -> false
         }
 
@@ -1280,7 +1285,7 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun saveSortSettings() {
-        if (currentMode == "recent" || currentMode == "smart_shared" || currentMode == "messenger") return
+        if (currentMode == "recent" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "smart_documents") return
 
         val editor = prefs.edit()
         val sortKey = "sort_mode_$currentMode"
@@ -1331,6 +1336,61 @@ class FileListActivity : AppCompatActivity() {
         })
     }
 
+    private fun setupWorkDocumentChips() {
+        bindWorkDocumentChip(R.id.chipWorkAll, SmartWorkDocumentRepository.TYPE_ALL)
+        bindWorkDocumentChip(R.id.chipWorkPdf, SmartWorkDocumentRepository.TYPE_PDF)
+        bindWorkDocumentChip(R.id.chipWorkWord, SmartWorkDocumentRepository.TYPE_WORD)
+        bindWorkDocumentChip(R.id.chipWorkExcel, SmartWorkDocumentRepository.TYPE_EXCEL)
+        bindWorkDocumentChip(R.id.chipWorkPpt, SmartWorkDocumentRepository.TYPE_PPT)
+        bindWorkDocumentChip(R.id.chipWorkHwp, SmartWorkDocumentRepository.TYPE_HWP)
+        bindWorkDocumentChip(R.id.chipWorkOther, SmartWorkDocumentRepository.TYPE_OTHER)
+        updateWorkDocumentChipSelection()
+        updateWorkDocumentChipVisibility(currentMode)
+    }
+
+    private fun bindWorkDocumentChip(viewId: Int, type: String) {
+        findViewById<TextView>(viewId).setOnClickListener {
+            if (currentWorkDocTypeFilter == type && currentMode == "smart_documents") return@setOnClickListener
+            currentWorkDocTypeFilter = type
+            updateWorkDocumentChipSelection()
+            if (currentMode == "smart_documents") {
+                if (isSearchMode) {
+                    performSearch(currentSearchQuery)
+                } else {
+                    loadData(currentMode, currentPath)
+                }
+            }
+        }
+    }
+
+    private fun updateWorkDocumentChipVisibility(mode: String) {
+        val chipLayout = findViewById<HorizontalScrollView>(R.id.layoutDocTypeChips)
+        chipLayout.visibility = if (mode == "smart_documents") View.VISIBLE else View.GONE
+    }
+
+    private fun updateWorkDocumentChipSelection() {
+        val selectedBg = R.drawable.bg_storage_tab_selected
+        val unselectedBg = R.drawable.bg_storage_tab_unselected
+        val selectedColor = Color.parseColor("#0D47A1")
+        val unselectedColor = Color.parseColor("#616161")
+
+        val mapping = listOf(
+            R.id.chipWorkAll to SmartWorkDocumentRepository.TYPE_ALL,
+            R.id.chipWorkPdf to SmartWorkDocumentRepository.TYPE_PDF,
+            R.id.chipWorkWord to SmartWorkDocumentRepository.TYPE_WORD,
+            R.id.chipWorkExcel to SmartWorkDocumentRepository.TYPE_EXCEL,
+            R.id.chipWorkPpt to SmartWorkDocumentRepository.TYPE_PPT,
+            R.id.chipWorkHwp to SmartWorkDocumentRepository.TYPE_HWP,
+            R.id.chipWorkOther to SmartWorkDocumentRepository.TYPE_OTHER
+        )
+
+        mapping.forEach { (viewId, type) ->
+            val chip = findViewById<TextView>(viewId)
+            val selected = type == currentWorkDocTypeFilter
+            chip.setBackgroundResource(if (selected) selectedBg else unselectedBg)
+            chip.setTextColor(if (selected) selectedColor else unselectedColor)
+        }
+    }
     private fun enterSearchMode() {
         val etSearch: EditText = findViewById(R.id.etSearch)
         val headerNormal: LinearLayout = findViewById(R.id.headerNormal)
@@ -1348,7 +1408,7 @@ class FileListActivity : AppCompatActivity() {
             currentSortMode = "name"
             isAscending = true
         }
-        btnSearchSort.visibility = if (currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger") View.GONE else View.VISIBLE
+        btnSearchSort.visibility = if (currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "smart_documents") View.GONE else View.VISIBLE
 
         headerNormal.visibility = View.GONE
         headerSearch.visibility = View.VISIBLE
@@ -1379,6 +1439,7 @@ class FileListActivity : AppCompatActivity() {
                     "recent" -> repository.getRecentFiles(maxAgeDays = null)
                     "large", "duplicate" -> if (currentMode == "duplicate") repository.getDuplicateFiles() else repository.getLargeFiles()
                     "smart_shared" -> smartSelectionRepository.getFrequentlySharedFiles()
+                    "smart_documents" -> smartWorkDocumentRepository.getWorkDocuments(typeFilter = currentWorkDocTypeFilter)
                     "messenger" -> repository.getMessengerFiles(sourceApp = messengerAppFilter)
                     else -> repository.getFilesByPath(currentPath)
                 }
@@ -1397,6 +1458,7 @@ class FileListActivity : AppCompatActivity() {
                 "recent" -> repository.getRecentFiles(query = query, maxAgeDays = null)
                 "large", "duplicate" -> if (currentMode == "duplicate") repository.getDuplicateFiles(query = query) else repository.getLargeFiles(query = query)
                 "smart_shared" -> smartSelectionRepository.getFrequentlySharedFiles(query = query)
+                "smart_documents" -> smartWorkDocumentRepository.getWorkDocuments(query = query, typeFilter = currentWorkDocTypeFilter)
                 "messenger" -> repository.getMessengerFiles(query = query, sourceApp = messengerAppFilter)
                 "download" -> {
                     val downloadPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
@@ -1428,7 +1490,7 @@ class FileListActivity : AppCompatActivity() {
     }
 
     private fun showSortMenu(view: View) {
-        if ((currentMode == "recent" && !isSearchMode) || currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger") return
+        if ((currentMode == "recent" && !isSearchMode) || currentMode == "large" || currentMode == "duplicate" || currentMode == "smart_shared" || currentMode == "messenger" || currentMode == "smart_documents") return
 
         val popup = PopupMenu(this, view)
         popup.menuInflater.inflate(R.menu.menu_sort, popup.menu)
@@ -1468,6 +1530,8 @@ class FileListActivity : AppCompatActivity() {
     private fun applySortAndSubmit(files: List<FileItem>, isSearchResult: Boolean = false) {
         val sortedFiles = if (currentMode == "duplicate" || currentMode == "large" || currentMode == "smart_shared") {
             files
+        } else if (currentMode == "smart_documents") {
+            files.sortedWith(compareByDescending<FileItem> { it.smartScore }.thenByDescending { it.dateModified }.thenBy { it.path.lowercase() })
         } else if (currentMode == "messenger") {
             files.sortedWith(compareBy<FileItem> { MessengerPathMatcher.detectSourceName(it.path) }.thenByDescending { it.dateModified }.thenBy { it.path.lowercase() })
         } else {
@@ -1505,6 +1569,10 @@ class FileListActivity : AppCompatActivity() {
                 tvEmptyTitle.text = getString(R.string.empty_search_title)
                 tvEmptyMessage.text = getString(R.string.empty_search_message)
                 ivEmptyIcon.setImageResource(R.drawable.ic_search)
+            } else if (currentMode == "smart_documents") {
+                tvEmptyTitle.text = getString(R.string.smart_documents_empty_title)
+                tvEmptyMessage.text = getString(R.string.smart_documents_empty_desc)
+                ivEmptyIcon.setImageResource(R.drawable.ic_file)
             } else {
                 tvEmptyTitle.text = getString(R.string.empty_folder_title)
                 tvEmptyMessage.text = getString(R.string.empty_folder_message)
@@ -1574,9 +1642,12 @@ class FileListActivity : AppCompatActivity() {
 
         currentMode = mode
         currentPath = path
-        adapter.showParentPathLine = mode == "duplicate" || mode == "large" || mode == "image" || mode == "video" || mode == "audio" || mode == "document" || mode == "download" || mode == "app" || mode == "smart_shared" || mode == "messenger"
+        adapter.showParentPathLine = mode == "duplicate" || mode == "large" || mode == "image" || mode == "video" || mode == "audio" || mode == "document" || mode == "download" || mode == "app" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents"
+        adapter.preferStaticIcons = false
         pasteTargetPath = if (mode == "folder") path else rootPath
         updateStorageTabsForMode(mode)
+        updateWorkDocumentChipVisibility(mode)
+        updateWorkDocumentChipSelection()
 
         val tvTitle = findViewById<TextView>(R.id.tvPageTitle)
         val btnNewFolder = findViewById<ImageView>(R.id.btnNewFolder)
@@ -1624,7 +1695,7 @@ class FileListActivity : AppCompatActivity() {
                 btnSort.visibility = View.GONE
                 btnRecentMore.visibility = View.VISIBLE
                 btnSearchSort.visibility = View.VISIBLE
-            } else if (mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger") {
+            } else if (mode == "large" || mode == "duplicate" || mode == "smart_shared" || mode == "messenger" || mode == "smart_documents") {
                 btnSort.visibility = View.GONE
                 btnRecentMore.visibility = View.GONE
                 btnSearchSort.visibility = View.GONE
@@ -1681,6 +1752,7 @@ class FileListActivity : AppCompatActivity() {
                 "download" -> repository.getDownloads()
                 "large" -> repository.getLargeFiles()
                 "smart_shared" -> smartSelectionRepository.getFrequentlySharedFiles()
+                "smart_documents" -> smartWorkDocumentRepository.getWorkDocuments(typeFilter = currentWorkDocTypeFilter)
                 "messenger" -> repository.getMessengerFiles(sourceApp = messengerAppFilter)
                 else -> repository.getFilesByPath(path)
             }

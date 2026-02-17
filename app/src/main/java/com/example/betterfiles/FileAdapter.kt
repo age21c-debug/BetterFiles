@@ -36,7 +36,7 @@ class FileAdapter(
 ) : RecyclerView.Adapter<FileAdapter.FileViewHolder>() {
 
     private var files: List<FileItem> = emptyList()
-    private val pdfThumbCache = LruCache<String, Bitmap>(48)
+    private val pdfThumbCache = LruCache<String, Bitmap>(160)
     private var internalRootPath: String? = null
     private var duplicateMinModifiedByGroup: Map<String, Long> = emptyMap()
 
@@ -46,6 +46,7 @@ class FileAdapter(
     var showDuplicateHeaders = false
     var showMessengerHeaders = false
     var showParentPathLine = false
+    var preferStaticIcons = false
 
     val currentList: List<FileItem>
         get() = files
@@ -131,6 +132,7 @@ class FileAdapter(
             Glide.with(itemView.context).clear(ivIcon)
             ivIcon.clearColorFilter()
             ivIcon.setImageDrawable(null)
+            ivIcon.tag = item.path
 
             FileVisualRules.bindThumbnail(
                 context = itemView.context,
@@ -138,7 +140,8 @@ class FileAdapter(
                 fileItem = item,
                 file = file,
                 pdfCache = pdfThumbCache,
-                pdfThumbWidth = 180
+                pdfThumbWidth = 180,
+                allowHeavyThumbnail = !preferStaticIcons
             )
 
             val dateStr = getFormattedDate(item.dateModified * 1000)

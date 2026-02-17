@@ -173,7 +173,7 @@
     <string name="smart_recent_updated_format">최근 수정: %1$s</string>
     <string name="smart_total_size_format">총 용량: %1$s</string>
     <string name="smart_messenger_headline_format">메신저 앱 파일 %1$d개</string>
-    <string name="smart_documents_headline_format">최근 6개월 문서 %1$d개</string>
+    <string name="smart_documents_headline_format">업무 관련 문서 %1$d개</string>
     <string name="smart_event_headline_format">%1$d개 · %2$s</string>
     <string name="smart_event_period_format">촬영 기간: %1$d일</string>
     <string name="smart_shared_empty_title">자주 공유된 파일이 없습니다</string>
@@ -181,7 +181,14 @@
     <string name="smart_messenger_empty_title">아직 메신저 파일이 없습니다</string>
     <string name="smart_messenger_empty_desc">파일을 받으면 자동으로 표시됩니다</string>
     <string name="smart_documents_empty_title">업무 문서가 없습니다</string>
-    <string name="smart_documents_empty_desc">최근 6개월 문서 파일이 표시됩니다</string>
+    <string name="smart_documents_empty_desc">관련 문서가 생기면 자동으로 모아 보여드립니다</string>
+    <string name="work_doc_filter_all">전체</string>
+    <string name="work_doc_filter_pdf">PDF</string>
+    <string name="work_doc_filter_word">Word</string>
+    <string name="work_doc_filter_excel">Excel</string>
+    <string name="work_doc_filter_ppt">PPT</string>
+    <string name="work_doc_filter_hwp">HWP</string>
+    <string name="work_doc_filter_other">기타 문서</string>
     <string name="smart_event_empty_title">최근 사진 묶음이 없습니다</string>
     <string name="smart_event_empty_desc">최근 3일 사진이 자동으로 묶여 표시됩니다</string>
     <string name="smart_recent_included_files_format">최근 공유 파일 %1$d개 포함</string>

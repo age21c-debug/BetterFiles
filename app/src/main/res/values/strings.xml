@@ -173,7 +173,7 @@
     <string name="smart_recent_updated_format">Recently updated: %1$s</string>
     <string name="smart_total_size_format">Total size: %1$s</string>
     <string name="smart_messenger_headline_format">%1$d files from messenger apps</string>
-    <string name="smart_documents_headline_format">%1$d documents in last 6 months</string>
+    <string name="smart_documents_headline_format">%1$d work-related documents</string>
     <string name="smart_event_headline_format">%1$d files · %2$s</string>
     <string name="smart_event_period_format">Capture period: %1$d days</string>
     <string name="smart_shared_empty_title">No frequently shared files</string>
@@ -181,7 +181,14 @@
     <string name="smart_messenger_empty_title">No messenger files yet</string>
     <string name="smart_messenger_empty_desc">They will appear automatically after receiving files</string>
     <string name="smart_documents_empty_title">No work documents</string>
-    <string name="smart_documents_empty_desc">Document files from the last 6 months will appear here</string>
+    <string name="smart_documents_empty_desc">Work-related files will be grouped automatically</string>
+    <string name="work_doc_filter_all">All</string>
+    <string name="work_doc_filter_pdf">PDF</string>
+    <string name="work_doc_filter_word">Word</string>
+    <string name="work_doc_filter_excel">Excel</string>
+    <string name="work_doc_filter_ppt">PPT</string>
+    <string name="work_doc_filter_hwp">HWP</string>
+    <string name="work_doc_filter_other">Other Docs</string>
     <string name="smart_event_empty_title">No recent photo bundle</string>
     <string name="smart_event_empty_desc">Photos from the last 3 days will be grouped here</string>
     <string name="smart_recent_included_files_format">Includes %1$d recently shared files</string>

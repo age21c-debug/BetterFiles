@@ -44,6 +44,7 @@ data class EventPhotoSummary(
 class SmartCategorySummaryRepository(private val context: Context) {
     private val store = SmartShareHistoryStore.get(context)
     private val fileRepository = FileRepository(context)
+    private val workDocumentRepository = SmartWorkDocumentRepository(context)
 
     suspend fun getFrequentlySharedSummary(): SharedFilesSummary = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
@@ -105,29 +106,11 @@ class SmartCategorySummaryRepository(private val context: Context) {
     }
 
     suspend fun getWorkDocumentsSummary(): WorkDocumentsSummary = withContext(Dispatchers.IO) {
-        val cutoffSec = (System.currentTimeMillis() - 180L * 24L * 60L * 60L * 1000L) / 1000L
-        val selection = """
-            ${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL AND
-            (${MediaStore.Files.FileColumns.MIME_TYPE} LIKE ? OR ${MediaStore.Files.FileColumns.MIME_TYPE} LIKE ?) AND
-            ${MediaStore.Files.FileColumns.MIME_TYPE} != ? AND
-            ${MediaStore.Files.FileColumns.MIME_TYPE} != ? AND
-            (${MediaStore.Files.FileColumns.DATE_MODIFIED} >= ? OR ${MediaStore.Files.FileColumns.DATE_ADDED} >= ?)
-        """.trimIndent()
-        val rows = queryFiles(
-            selection = selection,
-            selectionArgs = arrayOf(
-                "application/%",
-                "text/%",
-                "application/vnd.android.package-archive",
-                "application/zip",
-                cutoffSec.toString(),
-                cutoffSec.toString()
-            )
-        )
+        val rows = workDocumentRepository.getWorkDocuments()
         WorkDocumentsSummary(
             itemCount = rows.size,
-            totalBytes = rows.sumOf { it.sizeBytes },
-            lastModifiedAtMs = rows.maxOfOrNull { it.timestampMs }
+            totalBytes = rows.sumOf { it.size },
+            lastModifiedAtMs = rows.maxOfOrNull { it.dateModified * 1000L }
         )
     }
 

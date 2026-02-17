@@ -301,6 +301,120 @@
                     android:background="@drawable/bg_storage_tab_unselected" />
             </LinearLayout>
 
+            <HorizontalScrollView
+                android:id="@+id/layoutDocTypeChips"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="8dp"
+                android:scrollbars="none"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/chipWorkAll"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_storage_tab_selected"
+                        android:paddingStart="12dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="12dp"
+                        android:paddingBottom="8dp"
+                        android:text="@string/work_doc_filter_all"
+                        android:textColor="#0D47A1"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/chipWorkPdf"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_storage_tab_unselected"
+                        android:paddingStart="12dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="12dp"
+                        android:paddingBottom="8dp"
+                        android:text="@string/work_doc_filter_pdf"
+                        android:textColor="#616161"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/chipWorkWord"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_storage_tab_unselected"
+                        android:paddingStart="12dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="12dp"
+                        android:paddingBottom="8dp"
+                        android:text="@string/work_doc_filter_word"
+                        android:textColor="#616161"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/chipWorkExcel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_storage_tab_unselected"
+                        android:paddingStart="12dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="12dp"
+                        android:paddingBottom="8dp"
+                        android:text="@string/work_doc_filter_excel"
+                        android:textColor="#616161"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/chipWorkPpt"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_storage_tab_unselected"
+                        android:paddingStart="12dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="12dp"
+                        android:paddingBottom="8dp"
+                        android:text="@string/work_doc_filter_ppt"
+                        android:textColor="#616161"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/chipWorkHwp"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_storage_tab_unselected"
+                        android:paddingStart="12dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="12dp"
+                        android:paddingBottom="8dp"
+                        android:text="@string/work_doc_filter_hwp"
+                        android:textColor="#616161"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/chipWorkOther"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_storage_tab_unselected"
+                        android:paddingStart="12dp"
+                        android:paddingTop="8dp"
+                        android:paddingEnd="12dp"
+                        android:paddingBottom="8dp"
+                        android:text="@string/work_doc_filter_other"
+                        android:textColor="#616161"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </HorizontalScrollView>
+
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rvFiles"
                 android:layout_width="match_parent"

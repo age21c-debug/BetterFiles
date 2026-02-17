@@ -42,7 +42,13 @@ class SmartCategoryActivity : AppCompatActivity() {
             startActivity(Intent(this, MessengerAppsActivity::class.java))
         }
         findViewById<CardView>(R.id.cardSmartEntry3).setOnClickListener {
-            Toast.makeText(this, getString(R.string.storage_feature_coming_soon), Toast.LENGTH_SHORT).show()
+            startActivity(
+                Intent(this, FileListActivity::class.java).apply {
+                    putExtra("mode", "smart_documents")
+                    putExtra("title", getString(R.string.smart_entry_3))
+                    putExtra("path", StorageVolumeHelper.getStorageRoots(this@SmartCategoryActivity).internalRoot)
+                }
+            )
         }
         findViewById<CardView>(R.id.cardSmartEntry4).setOnClickListener {
             Toast.makeText(this, getString(R.string.storage_feature_coming_soon), Toast.LENGTH_SHORT).show()

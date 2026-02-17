@@ -23,7 +23,9 @@ data class FileItem(
     var isSelected: Boolean = false,
     val duplicateGroupKey: String? = null,
     val duplicateGroupCount: Int = 0,
-    val duplicateGroupSavingsBytes: Long = 0L
+    val duplicateGroupSavingsBytes: Long = 0L,
+    val smartScore: Int = 0,
+    val smartDocumentType: String? = null
 ) : Parcelable {
 
     // ?좎쭨瑜?蹂닿린 醫뗪쾶 諛붽씀??湲곕뒫 (?? 2024-01-30)
