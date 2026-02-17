@@ -11,6 +11,7 @@ data class MessengerSource(
 
 object MessengerPathMatcher {
     private const val MIN_FILE_BYTES = 10L * 1024L
+    private const val STORAGE_PREFIX = "/storage/emulated/0/"
 
     val sources: List<MessengerSource> = listOf(
         MessengerSource(
@@ -189,61 +190,61 @@ object MessengerPathMatcher {
         )
     )
 
-    fun isMessengerPath(path: String): Boolean {
-        val normalized = normalize(path)
-        if (normalized.isBlank()) return false
-
-        // Exclude transient folders.
-        val lowered = normalized.lowercase(Locale.ROOT)
-        if (lowered.contains("/cache/") || lowered.contains("/temp/") || lowered.contains("/thumbnails/")) {
-            return false
-        }
-
-        val relative = normalized.removePrefix("/storage/emulated/0/").removePrefix("storage/emulated/0/")
-        val segments = relative.split('/').filter { it.isNotBlank() }
-        val loweredSegments = segments.map { it.lowercase(Locale.ROOT) }
-
-        return sources.any { source ->
-            source.pathPatterns.any { pattern ->
-                val patternSegments = normalize(pattern).split('/').filter { it.isNotBlank() }
-                if (patternSegments.isEmpty()) {
-                    false
-                } else {
-                    // 1) Fast-path: normalized substring match for common real-world path variants.
-                    val patternNormalized = normalize(pattern).lowercase(Locale.ROOT)
-                    if (relative.lowercase(Locale.ROOT).contains(patternNormalized)) {
-                        true
-                    } else {
-                        // 2) Fallback: ordered segment subsequence match (non-contiguous).
-                        val loweredPattern = patternSegments.map { it.lowercase(Locale.ROOT) }
-                        containsOrderedSegments(loweredSegments, loweredPattern)
-                    }
-                }
-            }
-        }
-    }
+    fun isMessengerPath(path: String): Boolean = findBestSource(path) != null
 
     fun detectSourceName(path: String): String {
-        val normalized = normalize(path)
-            .removePrefix("/storage/emulated/0/")
-            .removePrefix("storage/emulated/0/")
-            .lowercase(Locale.ROOT)
-
-        for (source in sources) {
-            for (pattern in source.pathPatterns) {
-                val p = normalize(pattern).lowercase(Locale.ROOT)
-                if (p.isNotBlank() && normalized.contains(p)) {
-                    return source.appName
-                }
-            }
-        }
-        return "Other"
+        return findBestSource(path)?.appName ?: "Other"
     }
 
     fun isValidSize(sizeBytes: Long): Boolean = sizeBytes >= MIN_FILE_BYTES
 
     private fun normalize(path: String): String {
         return path.replace('\\', '/').trim()
+    }
+
+    private fun findBestSource(path: String): MessengerSource? {
+        val normalized = normalize(path)
+        if (normalized.isBlank()) return null
+
+        val lowered = normalized.lowercase(Locale.ROOT)
+        if (lowered.contains("/cache/") || lowered.contains("/temp/") || lowered.contains("/thumbnails/")) {
+            return null
+        }
+
+        val relative = normalized.removePrefix(STORAGE_PREFIX).removePrefix(STORAGE_PREFIX.removePrefix("/"))
+        val relativeLowered = relative.lowercase(Locale.ROOT)
+        val loweredSegments = relative
+            .split('/')
+            .filter { it.isNotBlank() }
+            .map { it.lowercase(Locale.ROOT) }
+
+        var bestSource: MessengerSource? = null
+        var bestScore = -1
+
+        for (source in sources) {
+            var sourceBestScore = -1
+            for (pattern in source.pathPatterns) {
+                val patternSegments = normalize(pattern)
+                    .split('/')
+                    .filter { it.isNotBlank() }
+                    .map { it.lowercase(Locale.ROOT) }
+                if (patternSegments.isEmpty()) continue
+
+                val patternLowered = patternSegments.joinToString("/")
+                val score = when {
+                    relativeLowered.contains(patternLowered) -> patternSegments.size * 10 + 5
+                    containsOrderedSegments(loweredSegments, patternSegments) -> patternSegments.size * 10
+                    else -> -1
+                }
+                if (score > sourceBestScore) sourceBestScore = score
+            }
+            if (sourceBestScore > bestScore) {
+                bestScore = sourceBestScore
+                bestSource = source
+            }
+        }
+
+        return bestSource
     }
 
     private fun containsOrderedSegments(target: List<String>, pattern: List<String>): Boolean {
