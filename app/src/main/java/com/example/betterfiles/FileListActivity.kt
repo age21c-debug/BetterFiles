@@ -162,7 +162,9 @@ class FileListActivity : AppCompatActivity() {
                 showFileOptionMenu(view, fileItem)
             },
             onLongClick = { fileItem ->
-                if (!FileClipboard.hasClip()) {
+                if (isSelectionMode) {
+                    showFileDetailsDialog(fileItem)
+                } else if (!FileClipboard.hasClip()) {
                     startSelectionMode(fileItem)
                 }
             },

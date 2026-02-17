@@ -72,7 +72,6 @@ class MainActivity : AppCompatActivity() {
         val btnAudio: View = findViewById(R.id.btnAudio)
         val btnDocuments: View = findViewById(R.id.btnDocuments)
         val btnDownloads: View = findViewById(R.id.btnDownloads)
-        val btnApps: View = findViewById(R.id.btnApps)
         val btnSmartCategory: View = findViewById(R.id.btnSmartCategory)
         val btnMainMenu: View = findViewById(R.id.btnMainMenu)
         val btnHomeSearch: View = findViewById(R.id.btnHomeSearch)
@@ -123,10 +122,6 @@ class MainActivity : AppCompatActivity() {
 
         btnDownloads.setOnClickListener {
             openActivity(mode = "download", title = getString(R.string.downloads))
-        }
-
-        btnApps.setOnClickListener {
-            openActivity(mode = "app", title = getString(R.string.apps))
         }
 
         btnSmartCategory.setOnClickListener {

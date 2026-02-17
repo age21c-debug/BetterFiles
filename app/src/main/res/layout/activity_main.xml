@@ -194,7 +194,7 @@
                 android:orientation="horizontal">
 
                 <LinearLayout
-                    android:id="@+id/btnDocuments"
+                    android:id="@+id/btnSmartCategory"
                     android:layout_width="0dp"
                     android:layout_height="120dp"
                     android:layout_weight="1"
@@ -209,12 +209,12 @@
                         android:layout_width="30dp"
                         android:layout_height="30dp"
                         android:layout_marginBottom="8dp"
-                        android:src="@drawable/ic_doc_word" />
+                        android:src="@drawable/ic_smart_folder_sparkle" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/documents"
+                        android:text="@string/smart_category"
                         android:textStyle="bold"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -248,7 +248,7 @@
                 </LinearLayout>
 
                 <LinearLayout
-                    android:id="@+id/btnApps"
+                    android:id="@+id/btnDocuments"
                     android:layout_width="0dp"
                     android:layout_height="120dp"
                     android:layout_weight="1"
@@ -263,13 +263,12 @@
                         android:layout_width="30dp"
                         android:layout_height="30dp"
                         android:layout_marginBottom="8dp"
-                        android:src="@drawable/ic_android"
-                        app:tint="#5F6368" />
+                        android:src="@drawable/ic_doc_word" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/apps"
+                        android:text="@string/documents"
                         android:textStyle="bold"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -364,53 +363,6 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-
-                <LinearLayout
-                    android:id="@+id/btnSmartCategory"
-                    android:layout_width="0dp"
-                    android:layout_height="120dp"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="4dp"
-                    android:background="@drawable/bg_home_tile"
-                    android:foreground="?attr/selectableItemBackground"
-                    android:padding="8dp"
-                    android:gravity="center"
-                    android:orientation="vertical">
-
-                    <ImageView
-                        android:layout_width="30dp"
-                        android:layout_height="30dp"
-                        android:layout_marginBottom="8dp"
-                        android:src="@drawable/ic_smart_folder_sparkle" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/smart_category"
-                        android:textStyle="bold"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="120dp"
-                    android:layout_weight="1"
-                    android:layout_marginStart="4dp"
-                    android:layout_marginEnd="4dp"
-                    android:visibility="invisible" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="120dp"
-                    android:layout_weight="1"
-                    android:layout_marginStart="4dp"
-                    android:visibility="invisible" />
-            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout

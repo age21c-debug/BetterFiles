@@ -221,12 +221,8 @@ class FileAdapter(
             }
 
             itemView.setOnLongClickListener {
-                if (!isSelectionMode) {
-                    onLongClick(item)
-                    true
-                } else {
-                    false
-                }
+                onLongClick(item)
+                true
             }
 
             btnMore.setOnClickListener { view -> onMoreClick(view, item) }
