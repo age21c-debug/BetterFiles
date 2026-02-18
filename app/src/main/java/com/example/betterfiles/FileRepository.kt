@@ -21,9 +21,12 @@ import kotlin.math.max
 class FileRepository(private val context: Context) {
     companion object {
         private const val DEFAULT_LARGE_FILE_MIN_BYTES: Long = 100L * 1024L * 1024L // 100MB
+        private const val AUTO_CLEAN_MIN_BYTES: Long = 20L * 1024L * 1024L // 20MB
         private const val LOW_USAGE_CANDIDATE_MIN_SCORE = 5
         private const val LOW_USAGE_STRONG_RECOMMEND_SCORE = 8
         private const val DAY_MS = 24L * 60L * 60L * 1000L
+        private const val AUTO_CLEAN_STALE_DAYS = 30L
+        private const val AUTO_CLEAN_SHARE_WINDOW_DAYS = 60L
         private const val QUICK_FINGERPRINT_CHUNK_BYTES = 64 * 1024
         private const val DUPLICATE_PERF_TAG = "DuplicatePerf"
     }
@@ -395,6 +398,409 @@ class FileRepository(private val context: Context) {
                     .thenBy { it.item.path.lowercase(Locale.ROOT) }
             )
             .map { it.item }
+    }
+
+    suspend fun getAutoCleanCandidates(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val deduped = LinkedHashMap<String, FileItem>()
+
+        addAutoCleanCandidates(
+            target = deduped,
+            candidates = getLowUsageLargeFiles(query = null),
+            requireNoisePathFilter = false
+        )
+        addAutoCleanCandidates(
+            target = deduped,
+            candidates = buildOldDownloadCandidates(now),
+            requireNoisePathFilter = true
+        )
+        addAutoCleanCandidates(
+            target = deduped,
+            candidates = buildOldSharedCandidates(now),
+            requireNoisePathFilter = true
+        )
+
+        var merged = deduped.values.toList()
+            .sortedWith(
+                compareByDescending<FileItem> { it.size }
+                    .thenByDescending { it.dateModified }
+                    .thenBy { it.path.lowercase(Locale.ROOT) }
+            )
+        if (!query.isNullOrBlank()) {
+            merged = merged.filter {
+                it.name.contains(query, ignoreCase = true) || it.path.contains(query, ignoreCase = true)
+            }
+        }
+        merged
+    }
+
+    suspend fun getOldDownloadFiles(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
+        val internalRoot = StorageVolumeHelper.getStorageRoots(context).internalRoot
+        val downloadRoot = normalizePath(File(internalRoot, "Download").absolutePath)
+        val rootPrefix = if (downloadRoot.isNullOrBlank()) null else "$downloadRoot${File.separator}"
+
+        val mergedBase = LinkedHashMap<String, FileItem>()
+        val downloadCandidates = getDownloads()
+        for (item in downloadCandidates) {
+            if (item.isDirectory) continue
+            val normalized = normalizePath(item.path) ?: continue
+            val inDownloadTree = normalized == downloadRoot || (rootPrefix != null && normalized.startsWith(rootPrefix))
+            if (!inDownloadTree) continue
+            mergedBase.putIfAbsent(normalized.lowercase(Locale.ROOT), item)
+        }
+
+        val messengerCandidates = getMessengerFiles(sourceApp = null)
+        for (item in messengerCandidates) {
+            if (item.isDirectory) continue
+            val normalized = normalizePath(item.path) ?: continue
+            mergedBase.putIfAbsent(normalized.lowercase(Locale.ROOT), item)
+        }
+
+        if (mergedBase.isEmpty()) return@withContext emptyList()
+
+        val now = System.currentTimeMillis()
+        val usageByPath = usageStore.queryPathUsageSignals(mergedBase.keys.toList())
+        val dateAddedByPathMs = queryDateAddedByPaths(mergedBase.values.map { it.path })
+
+        val scored = mergedBase.mapNotNull { (normalizedPath, item) ->
+            if (item.size < 100L * 1024L * 1024L) return@mapNotNull null
+            if (item.path.contains("${File.separator}Android${File.separator}data${File.separator}", ignoreCase = true)) {
+                return@mapNotNull null
+            }
+            if (isNoisePath(item.path)) return@mapNotNull null
+            val file = File(item.path)
+            if (!file.exists() || file.isDirectory) return@mapNotNull null
+
+            val usage = usageByPath[normalizedPath]
+            val lastOpenedAt = usage?.lastOpenedAt ?: 0L
+            val dateModifiedMs = item.dateModified * 1000L
+            val dateAddedMs = dateAddedByPathMs[normalizedPath] ?: 0L
+            val baselineMs = when {
+                lastOpenedAt > 0L -> lastOpenedAt
+                dateAddedMs > 0L -> dateAddedMs
+                else -> dateModifiedMs
+            }
+            val ageDays = ((now - baselineMs).coerceAtLeast(0L) / DAY_MS).toInt()
+
+            val sizeScore = when {
+                item.size >= 500L * 1024L * 1024L -> 3
+                item.size >= 200L * 1024L * 1024L -> 2
+                item.size >= 100L * 1024L * 1024L -> 1
+                else -> 0
+            }
+            val ageScore = when {
+                ageDays >= 180 -> 3
+                ageDays >= 90 -> 2
+                ageDays >= 30 -> 1
+                else -> 0
+            }
+            val totalScore = sizeScore + ageScore
+            if (totalScore <= 3) return@mapNotNull null
+
+            val isStrongRecommend = totalScore > 5
+            val rankScore = if (isStrongRecommend) 100 + totalScore else totalScore
+            item.copy(smartScore = rankScore)
+        }
+
+        var result = scored
+            .sortedWith(
+                compareByDescending<FileItem> { it.smartScore >= 100 }
+                    .thenByDescending { if (it.smartScore >= 100) it.smartScore - 100 else it.smartScore }
+                    .thenByDescending { it.size }
+                    .thenByDescending { it.dateModified }
+                    .thenBy { it.path.lowercase(Locale.ROOT) }
+            )
+        if (!query.isNullOrBlank()) {
+            result = result.filter { it.name.contains(query, ignoreCase = true) || it.path.contains(query, ignoreCase = true) }
+        }
+        result
+    }
+
+    suspend fun getOldSharedFiles(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val shareCandidates = usageStore.queryRecentShareCandidates(
+            nowMinus60Days = 0L,
+            minSharesInWindow = 1,
+            limit = 3000
+        )
+        if (shareCandidates.isEmpty()) return@withContext emptyList()
+
+        val deduped = LinkedHashMap<String, FileItem>()
+        for (candidate in shareCandidates) {
+            val lastSharedAt = candidate.lastSharedAt
+            if (lastSharedAt <= 0L) continue
+
+            val base = resolveShareCandidateToFileItem(candidate) ?: continue
+            if (base.isDirectory || base.size < AUTO_CLEAN_MIN_BYTES) continue
+            if (base.path.contains("${File.separator}Android${File.separator}data${File.separator}", ignoreCase = true)) continue
+            if (isNoisePath(base.path)) continue
+
+            val ageDays = ((now - lastSharedAt).coerceAtLeast(0L) / DAY_MS).toInt()
+            val sizeScore = when {
+                base.size >= 500L * 1024L * 1024L -> 3
+                base.size >= 200L * 1024L * 1024L -> 2
+                base.size >= 50L * 1024L * 1024L -> 1
+                else -> 0
+            }
+            val ageScore = when {
+                ageDays >= 240 -> 3
+                ageDays >= 120 -> 2
+                ageDays >= 60 -> 1
+                else -> 0
+            }
+            if (ageScore <= 0) continue
+
+            val totalScore = sizeScore + ageScore
+
+            // Option A: include from 60d, strong starts at 120d.
+            val isStrong = ageDays >= 120
+            val rankScore = if (isStrong) 100 + totalScore else totalScore
+            val enriched = base.copy(
+                smartScore = rankScore,
+                shareCount60d = candidate.shareCount60d,
+                lastSharedAtMs = lastSharedAt,
+                dateModified = (lastSharedAt / 1000L)
+            )
+
+            val key = normalizePath(enriched.path)?.lowercase(Locale.ROOT) ?: continue
+            val existing = deduped[key]
+            if (existing == null || enriched.smartScore > existing.smartScore || (enriched.smartScore == existing.smartScore && enriched.size > existing.size)) {
+                deduped[key] = enriched
+            }
+        }
+
+        var result = deduped.values
+            .sortedWith(
+                compareByDescending<FileItem> { it.smartScore >= 100 }
+                    .thenByDescending { if (it.smartScore >= 100) it.smartScore - 100 else it.smartScore }
+                    .thenByDescending { it.size }
+                    .thenByDescending { it.lastSharedAtMs }
+                    .thenBy { it.path.lowercase(Locale.ROOT) }
+            )
+        if (!query.isNullOrBlank()) {
+            result = result.filter { it.name.contains(query, ignoreCase = true) || it.path.contains(query, ignoreCase = true) }
+        }
+        result
+    }
+
+    private fun queryDateAddedByPaths(paths: List<String>): Map<String, Long> {
+        if (paths.isEmpty()) return emptyMap()
+        val normalized = paths.mapNotNull { normalizePath(it) }.distinct()
+        if (normalized.isEmpty()) return emptyMap()
+
+        val result = LinkedHashMap<String, Long>(normalized.size)
+        val collection = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(
+            MediaStore.Files.FileColumns.DATA,
+            MediaStore.Files.FileColumns.DATE_ADDED
+        )
+        val chunkSize = 300
+        for (i in normalized.indices step chunkSize) {
+            val chunk = normalized.subList(i, minOf(i + chunkSize, normalized.size))
+            val placeholders = chunk.joinToString(",") { "?" }
+            val selection = "${MediaStore.Files.FileColumns.DATA} IN ($placeholders)"
+            val args = chunk.toTypedArray()
+            try {
+                context.contentResolver.query(
+                    collection,
+                    projection,
+                    selection,
+                    args,
+                    null
+                )?.use { cursor ->
+                    val pathCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA)
+                    val dateAddedCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATE_ADDED)
+                    while (cursor.moveToNext()) {
+                        if (pathCol < 0 || dateAddedCol < 0) continue
+                        val rawPath = cursor.getString(pathCol) ?: continue
+                        val normalizedPath = normalizePath(rawPath)?.lowercase(Locale.ROOT) ?: continue
+                        val dateAddedSec = cursor.getLong(dateAddedCol)
+                        if (dateAddedSec > 0L) {
+                            result[normalizedPath] = dateAddedSec * 1000L
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // Best-effort enrichment: if DATE_ADDED lookup fails, caller falls back to lastOpened/dateModified.
+            }
+        }
+        return result
+    }
+
+    private fun addAutoCleanCandidates(
+        target: LinkedHashMap<String, FileItem>,
+        candidates: List<FileItem>,
+        requireNoisePathFilter: Boolean
+    ) {
+        for (item in candidates) {
+            if (item.isDirectory) continue
+            if (item.path.contains("${File.separator}Android${File.separator}data${File.separator}", ignoreCase = true)) {
+                continue
+            }
+            if (requireNoisePathFilter && isNoisePath(item.path)) continue
+
+            val file = File(item.path)
+            if (!file.exists() || file.isDirectory) continue
+
+            val key = normalizePath(item.path)?.lowercase(Locale.ROOT) ?: continue
+            if (!target.containsKey(key)) {
+                target[key] = item
+            }
+        }
+    }
+
+    private suspend fun buildOldDownloadCandidates(now: Long): List<FileItem> = withContext(Dispatchers.IO) {
+        val collection = MediaStore.Files.getContentUri("external")
+        val sortOrder = "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC"
+        val selectionParts = mutableListOf(
+            "${MediaStore.Files.FileColumns.MIME_TYPE} IS NOT NULL",
+            "${MediaStore.Files.FileColumns.SIZE} >= ?",
+            "(${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ? OR ${MediaStore.Files.FileColumns.RELATIVE_PATH} LIKE ?)",
+            "(${MediaStore.Files.FileColumns.DATA} IS NULL OR ${MediaStore.Files.FileColumns.DATA} NOT LIKE ?)"
+        )
+        val selectionArgs = mutableListOf(
+            AUTO_CLEAN_MIN_BYTES.toString(),
+            "Download/%",
+            "%/Download/%",
+            "%/Android/data/%"
+        )
+
+        val base = queryMediaStore(
+            collectionUri = collection,
+            selection = selectionParts.joinToString(" AND "),
+            selectionArgs = selectionArgs.toTypedArray(),
+            sortOrder = sortOrder
+        ).filter { item ->
+            !item.isDirectory &&
+                item.size >= AUTO_CLEAN_MIN_BYTES &&
+                isDownloadLikePath(item.path)
+        }
+        if (base.isEmpty()) return@withContext emptyList()
+
+        val normalizedPaths = base.mapNotNull { normalizePath(it.path) }.distinct()
+        val usageByPath = usageStore.queryPathUsageSignals(normalizedPaths)
+        val staleMs = AUTO_CLEAN_STALE_DAYS * DAY_MS
+
+        base.filter { item ->
+            val normalized = normalizePath(item.path) ?: return@filter false
+            val usage = usageByPath[normalized]
+            val baselineMs = if ((usage?.lastOpenedAt ?: 0L) > 0L) usage!!.lastOpenedAt else (item.dateModified * 1000L)
+            (now - baselineMs) >= staleMs
+        }
+    }
+
+    private suspend fun buildOldSharedCandidates(now: Long): List<FileItem> = withContext(Dispatchers.IO) {
+        val windowStart = now - (AUTO_CLEAN_SHARE_WINDOW_DAYS * DAY_MS)
+        val staleCutoff = now - (AUTO_CLEAN_STALE_DAYS * DAY_MS)
+        val shareCandidates = usageStore.queryRecentShareCandidates(
+            nowMinus60Days = windowStart,
+            minSharesInWindow = 1,
+            limit = 2000
+        )
+        if (shareCandidates.isEmpty()) return@withContext emptyList()
+
+        shareCandidates.mapNotNull { candidate ->
+            if (candidate.lastSharedAt > staleCutoff) return@mapNotNull null
+            val item = resolveShareCandidateToFileItem(candidate) ?: return@mapNotNull null
+            if (item.size < AUTO_CLEAN_MIN_BYTES) return@mapNotNull null
+            if (isNoisePath(item.path)) return@mapNotNull null
+            item.copy(
+                shareCount60d = candidate.shareCount60d,
+                lastSharedAtMs = candidate.lastSharedAt
+            )
+        }
+    }
+
+    private fun resolveShareCandidateToFileItem(candidate: SmartShareCandidate): FileItem? {
+        return when (candidate.keyType) {
+            SmartShareKeyType.PATH -> {
+                val file = File(candidate.key)
+                if (!file.exists() || file.isDirectory) return null
+                val ext = file.extension.lowercase(Locale.ROOT)
+                val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
+                FileItem(
+                    id = file.hashCode().toLong(),
+                    name = file.name,
+                    path = file.absolutePath,
+                    size = file.length(),
+                    dateModified = (candidate.lastSharedAt / 1000L),
+                    mimeType = mime,
+                    isDirectory = false,
+                    contentUri = Uri.fromFile(file)
+                )
+            }
+            SmartShareKeyType.MEDIA_ID -> {
+                val parsed = parseMediaKey(candidate.key) ?: return null
+                val uri = MediaStore.Files.getContentUri("external")
+                val projection = arrayOf(
+                    MediaStore.MediaColumns._ID,
+                    MediaStore.MediaColumns.DISPLAY_NAME,
+                    MediaStore.MediaColumns.DATA,
+                    MediaStore.MediaColumns.RELATIVE_PATH,
+                    MediaStore.MediaColumns.SIZE,
+                    MediaStore.MediaColumns.MIME_TYPE
+                )
+                try {
+                    context.contentResolver.query(
+                        uri,
+                        projection,
+                        "${MediaStore.MediaColumns._ID} = ?",
+                        arrayOf(parsed.id.toString()),
+                        null
+                    )?.use { cursor ->
+                        if (!cursor.moveToFirst()) return null
+                        val name = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)) ?: return null
+                        val dataCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                        val relCol = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+                        val dataPath = if (dataCol >= 0) cursor.getString(dataCol) else null
+                        val relPath = if (relCol >= 0) cursor.getString(relCol) else null
+                        val path = when {
+                            !dataPath.isNullOrBlank() -> dataPath
+                            !relPath.isNullOrBlank() -> File(Environment.getExternalStorageDirectory(), relPath).resolve(name).absolutePath
+                            else -> File(Environment.getExternalStorageDirectory(), name).absolutePath
+                        }
+                        val size = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE))
+                        val mime = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE))
+                            ?: "application/octet-stream"
+
+                        return FileItem(
+                            id = parsed.id,
+                            name = name,
+                            path = path,
+                            size = size,
+                            dateModified = (candidate.lastSharedAt / 1000L),
+                            mimeType = mime,
+                            isDirectory = false,
+                            contentUri = ContentUris.withAppendedId(uri, parsed.id)
+                        )
+                    }
+                } catch (e: Exception) {
+                    return null
+                }
+                null
+            }
+            else -> null
+        }
+    }
+
+    private fun parseMediaKey(key: String): ParsedMediaKey? {
+        val parts = key.split(":")
+        if (parts.size != 3) return null
+        if (parts[0] != "media") return null
+        val id = parts[2].toLongOrNull() ?: return null
+        return ParsedMediaKey(id = id)
+    }
+
+    private fun isDownloadLikePath(path: String): Boolean {
+        val normalized = path.replace('\\', '/').lowercase(Locale.ROOT)
+        return normalized.contains("/download/")
+    }
+
+    private fun isNoisePath(path: String): Boolean {
+        val normalized = path.replace('\\', '/').lowercase(Locale.ROOT)
+        return normalized.contains("/cache/") ||
+            normalized.contains("/temp/") ||
+            normalized.contains("/thumbnails/")
     }
 
     suspend fun getDuplicateFiles(query: String? = null): List<FileItem> = withContext(Dispatchers.IO) {
@@ -1006,6 +1412,10 @@ class FileRepository(private val context: Context) {
         val totalScore: Int,
         val lastOpenedAt: Long,
         val openCount: Int
+    )
+
+    private data class ParsedMediaKey(
+        val id: Long
     )
 
     private fun computeQuickFingerprint(file: File): String? {

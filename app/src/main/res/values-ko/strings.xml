@@ -96,6 +96,7 @@
     <string name="selection_total_size_format">총 %1$s</string>
     <string name="selection_count_and_size_format">%1$d개 선택됨 · 총 %2$s</string>
     <string name="confirm_delete_selected_message">선택한 항목 %1$d개를 삭제할까요?</string>
+    <string name="confirm_delete_selected_with_size_message">선택한 %1$d개 파일(%2$s)을 삭제하시겠습니까?</string>
     <string name="deleted_count_format">항목 %1$d개 삭제됨.</string>
     <string name="empty_search_title">검색 결과가 없습니다</string>
     <string name="empty_search_message">다른 검색어로 시도해보세요.</string>
@@ -269,6 +270,8 @@
     <string name="storage_analysis_scope_internal">내장 메모리</string>
     <string name="storage_analysis_page_title">저장공간 분석</string>
     <string name="storage_analysis_page_subtitle">불필요한 파일을 정리해 저장공간을 확보하세요.</string>
+    <string name="storage_auto_clean_title">자동 정리 제안</string>
+    <string name="storage_auto_clean_summary_format">%1$s 정리 가능 · %2$d개 파일</string>
     <string name="storage_duplicate_cleanup_title">중복 파일 정리</string>
     <string name="storage_duplicate_cleanup_desc">이름과 용량이 같은 파일을 찾아 정리합니다.</string>
     <string name="duplicate_group_header_format">절약 가능 %1$s · %2$d개</string>
@@ -283,5 +286,22 @@
     <string name="storage_large_cleanup_desc">용량이 큰 파일을 빠르게 찾아 정리합니다.</string>
     <string name="storage_low_usage_large_title">거의 사용하지 않는 대용량 파일</string>
     <string name="storage_low_usage_large_desc">열어본 횟수가 적고 최근에 쓰지 않은 큰 파일을 우선 추천합니다.</string>
+    <string name="storage_old_download_title">오래된 다운로드 파일</string>
+    <string name="storage_old_download_desc">다운로드/메신저 수신 파일 중 오래되어 큰 파일을 우선 추천합니다.</string>
+    <string name="storage_old_shared_title">공유 후 오래된 파일</string>
+    <string name="storage_old_shared_desc">공유 이후 오랫동안 다시 쓰지 않은 파일을 찾아 정리합니다.</string>
+    <string name="old_shared_empty_title">추천할 공유 후 오래된 파일이 없습니다</string>
+    <string name="old_shared_empty_message">공유 후 시간이 지나면 여기에 표시됩니다.</string>
+    <string name="duplicate_empty_title">추천할 중복 파일이 없습니다</string>
+    <string name="duplicate_empty_message">중복 파일이 발견되면 여기에 표시됩니다.</string>
+    <string name="large_empty_title">추천할 대용량 파일이 없습니다</string>
+    <string name="large_empty_message">정리 대상 대용량 파일이 생기면 여기에 표시됩니다.</string>
+    <string name="low_usage_large_empty_title">추천할 거의 사용하지 않는 대용량 파일이 없습니다</string>
+    <string name="low_usage_large_empty_message">해당 조건의 파일이 생기면 여기에 표시됩니다.</string>
+    <string name="old_download_empty_title">추천할 오래된 다운로드 파일이 없습니다</string>
+    <string name="old_download_empty_message">다운로드 후 시간이 지난 파일이 있으면 여기에 표시됩니다.</string>
+    <string name="auto_clean_empty_title">추천할 자동 정리 파일이 없습니다</string>
+    <string name="auto_clean_empty_message">정리 가능한 파일이 생기면 여기에 표시됩니다.</string>
+    <string name="action_review">검토하기</string>
     <string name="storage_feature_coming_soon">세부 기능은 다음 단계에서 구현됩니다.</string>
 </resources>

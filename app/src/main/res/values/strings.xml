@@ -96,6 +96,7 @@
     <string name="selection_total_size_format">Total %1$s</string>
     <string name="selection_count_and_size_format">%1$d selected · Total %2$s</string>
     <string name="confirm_delete_selected_message">Delete %1$d selected items?</string>
+    <string name="confirm_delete_selected_with_size_message">Delete %1$d selected files (%2$s)?</string>
     <string name="deleted_count_format">%1$d items deleted.</string>
     <string name="empty_search_title">No results found</string>
     <string name="empty_search_message">Try a different keyword.</string>
@@ -269,6 +270,8 @@
     <string name="storage_analysis_scope_internal">Internal storage</string>
     <string name="storage_analysis_page_title">Storage Analysis</string>
     <string name="storage_analysis_page_subtitle">Free up space by cleaning unnecessary files.</string>
+    <string name="storage_auto_clean_title">Auto Clean Suggestion</string>
+    <string name="storage_auto_clean_summary_format">Reclaim %1$s · %2$d files</string>
     <string name="storage_duplicate_cleanup_title">Duplicate File Cleanup</string>
     <string name="storage_duplicate_cleanup_desc">Find and clean files with same name and size.</string>
     <string name="duplicate_group_header_format">Save %1$s · %2$d items</string>
@@ -283,6 +286,23 @@
     <string name="storage_large_cleanup_desc">Find and clean large files quickly.</string>
     <string name="storage_low_usage_large_title">Low-Usage Large Files</string>
     <string name="storage_low_usage_large_desc">Prioritize large files that were rarely opened and not used recently.</string>
+    <string name="storage_old_download_title">Old Download Files</string>
+    <string name="storage_old_download_desc">Prioritize large stale files from Downloads and messenger-received files.</string>
+    <string name="storage_old_shared_title">Old Shared Files</string>
+    <string name="storage_old_shared_desc">Find files that stayed unused for a long time after sharing.</string>
+    <string name="old_shared_empty_title">No old shared files yet</string>
+    <string name="old_shared_empty_message">Files will appear here as time passes after sharing.</string>
+    <string name="duplicate_empty_title">No duplicate files to recommend</string>
+    <string name="duplicate_empty_message">Duplicate files will appear here when found.</string>
+    <string name="large_empty_title">No large files to recommend</string>
+    <string name="large_empty_message">Large cleanup targets will appear here when available.</string>
+    <string name="low_usage_large_empty_title">No low-usage large files to recommend</string>
+    <string name="low_usage_large_empty_message">Files matching this condition will appear here later.</string>
+    <string name="old_download_empty_title">No old download files to recommend</string>
+    <string name="old_download_empty_message">Downloaded files will appear here as they get older.</string>
+    <string name="auto_clean_empty_title">No auto-clean files to recommend</string>
+    <string name="auto_clean_empty_message">Cleanable files will appear here when available.</string>
+    <string name="action_review">Review</string>
     <string name="storage_feature_coming_soon">Detailed features will be implemented next.</string>
 </resources>
 
